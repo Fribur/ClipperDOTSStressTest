@@ -1,7 +1,7 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
 * Version   :  10.0 (beta) - also known as Clipper2                            *
-* Date      :  8 May 2022                                                      *
+* Date      :  13 May 2022                                                     *
 * Website   :  http://www.angusj.com                                           *
 * Copyright :  Angus Johnson 2010-2022                                         *
 * Purpose   :  This is the main polygon clipping module                        *
@@ -14,7 +14,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using UnityEngine;
 
 namespace Clipper2Lib
 {
@@ -834,11 +833,11 @@ namespace Clipper2Lib
 
     protected void AddPathsToVertexList(Paths64 paths, PathType polytype, bool isOpen)
     {
-      int pathCnt = paths.Count, totalVertCnt = 0;
-      foreach (Path64 p in paths) totalVertCnt += p.Count;
+      int totalVertCnt = 0;
+      foreach (Path64 path in paths) totalVertCnt += path.Count;
       _vertexList.Capacity = _vertexList.Count + totalVertCnt;
 
-      foreach (Path64 path in paths)
+      foreach (Path64 path in paths) 
       {
         Vertex? v0 = null, prev_v = null, curr_v;
         foreach (Point64 pt in path)
@@ -1532,12 +1531,10 @@ namespace Clipper2Lib
     private OutPt AddOutPt(Active ae, Point64 pt)
     {
       OutPt newOp;
-      //Debug.Log(pt);
-      //      if(pt.X == -76616333000 && pt.Y== 34866828900)
-      //      { }
+
       //Outrec.OutPts: a circular doubly-linked-list of POutPt where ...
       //opFront[.Prev]* ~~~> opBack & opBack == opFront.Next
-            OutRec outrec = ae.outrec!;
+      OutRec outrec = ae.outrec!;
       bool toFront = IsFront(ae);
       OutPt opFront = outrec.pts!;
       OutPt opBack = opFront.next!;
@@ -2089,8 +2086,9 @@ namespace Clipper2Lib
       bool result = false;
       Point64 pt = NextVertex(horzEdge).pt;
       //trim 180 deg. spikes in closed paths
-      while ((pt.Y == horzEdge.top.Y) && (!preserveCollinear ||
-                                          ((pt.X < horzEdge.top.X) == (horzEdge.bot.X < horzEdge.top.X))))
+      while ((pt.Y == horzEdge.top.Y) && 
+        (!preserveCollinear ||
+        ((pt.X < horzEdge.top.X) == (horzEdge.bot.X < horzEdge.top.X))))
       {
         horzEdge.vertexTop = NextVertex(horzEdge);
         horzEdge.top = pt;
@@ -2236,9 +2234,6 @@ namespace Clipper2Lib
           AddOutPt(horz, horz.top);
         UpdateEdgeIntoAEL(horz);
         isMax = IsMaxima(horz);
-
-        if (!horzIsOpen && !isMax && TrimHorz(horz, PreserveCollinear))
-          isMax = IsMaxima(horz); //i.e. update after TrimHorz
 
         isLeftToRight = ResetHorzDirection(horz, maxPair, out leftX, out rightX);
 
@@ -2821,7 +2816,6 @@ namespace Clipper2Lib
         OutRec outrec = ProcessJoin(j);
         CleanCollinear(outrec);
       }
-
       _joinerList.Clear();
     }
 
@@ -3343,16 +3337,15 @@ namespace Clipper2Lib
         for (int i = 0; i < _outrecList.Count; i++)
         {
           OutRec outrec = _outrecList[i];
-
           //make sure outer/owner paths preceed their inner paths ...
           if (outrec.owner != null && outrec.owner.idx > outrec.idx)
           {
             int j = outrec.owner.idx;
+            outrec.owner.idx = i;
             outrec.idx = j;
             _outrecList[i] = _outrecList[j];
             _outrecList[j] = outrec;
             outrec = _outrecList[i];
-            outrec.idx = i;
           }
 
           if (outrec.pts == null) continue;
@@ -3395,12 +3388,10 @@ namespace Clipper2Lib
 
     public Rect64 GetBounds()
     {
-      if (_vertexList.Count == 0) return new Rect64(0, 0, 0, 0);
-      Rect64 bounds = new Rect64(long.MaxValue, long.MaxValue, long.MinValue, long.MinValue);
-
+      Rect64 bounds = ClipperFunc.MaxInvalidRect64;
       foreach (Vertex t in _vertexList)
       {
-        Vertex vStart = t, v = vStart;
+        Vertex v = t;
         do
         {
           if (v.pt.X < bounds.left) bounds.left = v.pt.X;
@@ -3408,17 +3399,12 @@ namespace Clipper2Lib
           if (v.pt.Y < bounds.top) bounds.top = v.pt.Y;
           if (v.pt.Y > bounds.bottom) bounds.bottom = v.pt.Y;
           v = v.next!;
-        } while (v == vStart);
+        } while (v != t);
       }
-
+      if (bounds.IsEmpty()) return new Rect64(0, 0, 0, 0);
       return bounds;
     }
-        public void PrintVertices()
-        {
-            Debug.Log($"Vertex List Size: pt {_vertexList.Count} ");
-            Debug.Log($"Minimalist List Size: {_minimaList.Count} ");
-        }
-    } //ClipperBase class
+  } //ClipperBase class
 
 
   public class Clipper : ClipperBase
@@ -3510,7 +3496,7 @@ namespace Clipper2Lib
     public ZCallbackD? ZFillDFunc { get; set; }
 #endif
 
-    public ClipperD(int roundingDecimalPrecision = 2)
+    public ClipperD(int roundingDecimalPrecision = 0)
     {
       if (roundingDecimalPrecision < -8 || roundingDecimalPrecision > 8)
         throw new ClipperLibException("Error - RoundingDecimalPrecision exceeds the allowed range.");
@@ -3537,12 +3523,12 @@ namespace Clipper2Lib
 
     public void AddPath(PathD path, PathType polytype, bool isOpen = false)
     {
-      AddPath(ClipperFunc.ScalePath(path, _scale), polytype, isOpen);
+      base.AddPath(ClipperFunc.ScalePath64(path, _scale), polytype, isOpen);
     }
 
-    public void AddPaths(PathsD paths, PathType polytype, bool isOpen = false)//called by MAIN
+    public void AddPaths(PathsD paths, PathType polytype, bool isOpen = false)
     {
-      AddPaths(ClipperFunc.ScalePaths(paths, _scale), polytype, isOpen);
+      base.AddPaths(ClipperFunc.ScalePaths64(paths, _scale), polytype, isOpen);
     }
 
     public void AddSubject(PathD path)
@@ -3604,10 +3590,14 @@ namespace Clipper2Lib
 #endif
 
       if (!success) return false;
-      ClipperFunc.ScalePaths(solClosed64, _invScale, ref solutionClosed);
-      ClipperFunc.ScalePaths(solOpen64, _invScale, ref solutionOpen);
-      //solutionClosed = ClipperFunc.ScalePathsD(solClosed64, _invScale);
-      //solutionOpen   = ClipperFunc.ScalePathsD(solOpen64,   _invScale);
+
+      solutionClosed.Capacity = solClosed64.Count;
+      foreach (Path64 path in solClosed64)
+        solutionClosed.Add(ClipperFunc.ScalePathD(path, _invScale));
+      solutionOpen.Capacity = solOpen64.Count;
+      foreach (Path64 path in solOpen64)
+        solutionOpen.Add(ClipperFunc.ScalePathD(path, _invScale));
+
       return true;
     }
 
@@ -3643,8 +3633,12 @@ namespace Clipper2Lib
       ClearSolution();
       if (!success) return false;
       if (oPaths.Count > 0)
-         ClipperFunc.ScalePaths(oPaths, _invScale, ref openPaths);
-        //openPaths = ClipperFunc.ScalePathsD(oPaths, _invScale);
+      {
+        openPaths.Capacity = oPaths.Count;        
+        foreach (Path64 path in oPaths)
+          openPaths.Add(ClipperFunc.ScalePathD(path, _invScale));
+      }
+
       return true;
     }
 

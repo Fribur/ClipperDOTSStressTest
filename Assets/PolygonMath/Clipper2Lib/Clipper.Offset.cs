@@ -1,7 +1,7 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
 * Version   :  10.0 (beta) - also known as Clipper2                            *
-* Date      :  4 May 2022                                                      *
+* Date      :  10 May 2022                                                     *
 * Website   :  http://www.angusj.com                                           *
 * Copyright :  Angus Johnson 2010-2022                                         *
 * Purpose   :  Offsets both open and closed paths (i.e. polylines & polygons). *
@@ -120,6 +120,7 @@ namespace Clipper2Lib
     {
       _minLenSqrd = 1 / (_scale * _scale);
       PathsD solution = new PathsD();
+
       if (Math.Abs(delta) < _minLenSqrd)
       {
         foreach (PathGroup group in _pathGroups)
@@ -174,14 +175,15 @@ namespace Clipper2Lib
       {
         PathD p = paths[i];
         for (int j = 0; j < p.Count; j++)
+        {
           if (p[j].y < lp.y) continue;
           else if (p[j].y > lp.y || p[j].x < lp.x)
           {
             result = i;
             lp = p[j];
           }
+        }
       }
-
       return result;
     }
 

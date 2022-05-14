@@ -1,7 +1,7 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
 * Version   :  10.0 (beta) - also known as Clipper2                            *
-* Date      :  4 May 2022                                                      *
+* Date      :  10 May 2022                                                     *
 * Website   :  http://www.angusj.com                                           *
 * Copyright :  Angus Johnson 2010-2022                                         *
 * Purpose   :  Core structures and functions for the Clipper Library           *
@@ -27,6 +27,13 @@ namespace Clipper2Lib
       Z = pt.Z;
     }
 
+    public Point64(Point64 pt, double scale)
+    {
+      X = (long) Math.Round(pt.X * scale);
+      Y = (long) Math.Round(pt.Y * scale);
+      Z = (long) Math.Round(pt.Z * scale);
+    }
+    
     public Point64(long x, long y, long z = 0)
     {
       X = x;
@@ -175,6 +182,13 @@ namespace Clipper2Lib
       x = pt.X * scale;
       y = pt.Y * scale;
       z = pt.Z * scale;
+    }
+
+    public PointD(PointD pt, double scale)
+    {
+      x = pt.x * scale;
+      y = pt.y * scale;
+      z = pt.z * scale;
     }
 
     public PointD(long x, long y, long z = 0)
@@ -456,14 +470,12 @@ namespace Clipper2Lib
       double dy1 = seg1a.Y - seg1b.Y;
       double dx2 = seg2a.X - seg2b.X;
       double dy2 = seg2a.Y - seg2b.Y;
-      return (((dy1 * (seg2a.X - seg1a.X) - 
-        dx1 * (seg2a.Y - seg1a.Y)) * (dy1 * (seg2b.X - seg1a.X) - 
+      return (((dy1 * (seg2a.X - seg1a.X) -
+        dx1 * (seg2a.Y - seg1a.Y)) * (dy1 * (seg2b.X - seg1a.X) -
         dx1 * (seg2b.Y - seg1a.Y)) < 0) &&
-        ((dy2 * (seg1a.X - seg2a.X) - 
-        dx2 * (seg1a.Y - seg2a.Y)) * (dy2 * (seg1b.X - seg2a.X) - 
+        ((dy2 * (seg1a.X - seg2a.X) -
+        dx2 * (seg1a.Y - seg2a.Y)) * (dy2 * (seg1b.X - seg2a.X) -
         dx2 * (seg1b.Y - seg2a.Y)) < 0));
     }
-
   } //InternalClipperFuncs
-
 } //namespace

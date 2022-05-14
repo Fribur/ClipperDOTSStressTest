@@ -46,6 +46,7 @@ public partial class ClipperStruct : SystemBase
             }
 
         }).Schedule();
+        //World.EntityManager.DestroyEntity(GetSingletonEntity<ClipperStressTest>());
     }
 }
 ////example use of tree structure to access polygons directly from outPtList and OutRecList 

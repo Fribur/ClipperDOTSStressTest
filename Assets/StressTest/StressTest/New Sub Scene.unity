@@ -152,7 +152,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e13d43e0338b52a49bcf69b46bbc3510, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  clipperTestType: 4
+  clipperTestType: 2
   edgeCount: 0
 --- !u!4 &531615837
 Transform:
