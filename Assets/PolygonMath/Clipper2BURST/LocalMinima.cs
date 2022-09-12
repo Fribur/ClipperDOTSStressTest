@@ -1,19 +1,9 @@
-﻿/*******************************************************************************
-* Author    :  Angus Johnson                                                   *
-* Version   :  10.0 (beta) - also known as Clipper2                            *
-* Date      :  8 May 2022                                                      *
-* Website   :  http://www.angusj.com                                           *
-* Copyright :  Angus Johnson 2010-2022                                         *
-* Purpose   :  This is the main polygon clipping module                        *
-* Thanks    :  Special thanks to Thong Nguyen, Guus Kuiper, Phil Stopford,     *
-*           :  and Daniel Gosnell for their invaluable assistance with C#.     *
-* License   :  http://www.boost.org/LICENSE_1_0.txt                            *
-*******************************************************************************/
+﻿using System;
 using System.Collections.Generic;
 
 namespace PolygonMath.Clipping.Clipper2LibBURST
 {
-    public struct LocalMinima
+    public struct LocalMinima : IEquatable<LocalMinima>
     {
         public readonly int vertex_ID;
         public readonly long2 vertex;
@@ -26,6 +16,38 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             this.vertex = vertex;
             this.polytype = polytype;
             this.isOpen = isOpen;
+        }
+        public bool Equals(LocalMinima other)
+        {
+            return this == other;
+        }
+        public static bool operator ==(LocalMinima lm1, LocalMinima lm2)
+        {
+            return lm1.vertex_ID == lm2.vertex_ID &&
+                lm1.vertex == lm2.vertex &&
+                lm1.polytype == lm2.polytype &&
+                lm1.isOpen == lm2.isOpen;
+        }
+
+        public static bool operator !=(LocalMinima lm1, LocalMinima lm2)
+        {
+            return !(lm1 == lm2);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj))
+                return false;
+            return obj is LocalMinima minima && this == minima;
+        }
+        public override int GetHashCode()
+        {
+            int hash = 17;
+            hash = hash * 29 + vertex_ID;
+            hash = hash * 29 + vertex.GetHashCode();
+            hash = hash * 29 + (int)polytype;
+            //hash = hash * 29 + (int)isOpen;
+            return hash;
         }
     };
     struct LocMinSorter : IComparer<LocalMinima>

@@ -32,7 +32,9 @@ public partial class ClipperStruct : SystemBase
 
         var L_subj = _subj;
         var L_clip = _clip;
-        Job.WithoutBurst().WithCode(() =>
+        Job
+            .WithoutBurst()
+            .WithCode(() =>
         {
             Polygon _solution = new Polygon(2000, Allocator.Temp);
             ClipperD c = new ClipperD(Allocator.Temp);

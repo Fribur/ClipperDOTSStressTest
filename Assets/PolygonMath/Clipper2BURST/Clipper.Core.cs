@@ -1,15 +1,6 @@
-﻿/*******************************************************************************
-* Author    :  Angus Johnson                                                   *
-* Version   :  10.0 (beta) - also known as Clipper2                            *
-* Date      :  8 May 2022                                                      *
-* Website   :  http://www.angusj.com                                           *
-* Copyright :  Angus Johnson 2010-2022                                         *
-* Purpose   :  This is the main polygon clipping module                        *
-* Thanks    :  Special thanks to Thong Nguyen, Guus Kuiper, Phil Stopford,     *
-*           :  and Daniel Gosnell for their invaluable assistance with C#.     *
-* License   :  http://www.boost.org/LICENSE_1_0.txt                            *
-*******************************************************************************/
+﻿using Clipper2Lib;
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Unity.Mathematics;
 
@@ -79,7 +70,13 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             return $"({x},{y})";
         }
 
-        public override int GetHashCode() { return 0; }
+        public override int GetHashCode() 
+        {
+            int hash = 17;
+            hash = hash * 29 + (int)x;
+            hash = hash * 29 + (int)y;
+            return hash; 
+        }
     } 
     public struct Rect64
     {
@@ -120,6 +117,19 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         {
             return bottom <= top || right <= left;
         }
+        public bool Contains(long2 pt)
+        {
+            return pt.x > left && pt.x < right &&
+              pt.y > top && pt.y < bottom;
+        }
+
+        public bool Contains(Rect64 rec)
+        {
+            return rec.left >= left && rec.right <= right &&
+              rec.top >= top && rec.bottom <= bottom;
+        }
+
+
     }
 
     //Note: all clipping operations except for Difference are commutative.
@@ -157,18 +167,14 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         OnEdge
     };
 
-    public enum OutRecState
-    {
-        Undefined,
-        Open,
-        Outer,
-        Inner
-    };
-
     public static class InternalClipperFunc
     {
-        public const double floatingPointTolerance = 1E-15;
+        public const double floatingPointTolerance = 1E-12;
         public const double defaultMinimumEdgeLength = 0.1;
+        internal static bool IsAlmostZero(double value)
+        {
+            return (math.abs(value) <= floatingPointTolerance);
+        }
 
         public static double CrossProduct(long2 pt1, long2 pt2, long2 pt3)
         {
@@ -240,5 +246,69 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 dx2 * (seg1a.y - seg2a.y)) * (dy2 * (seg1b.x - seg2a.x) -
                 dx2 * (seg1b.y - seg2a.y)) < 0));
         }
+        public static PointInPolygonResult PointInPolygon(long2 pt, List<long2> polygon)
+        {
+            int len = polygon.Count, i = len - 1;
+
+            if (len < 3) return PointInPolygonResult.IsOutside;
+
+            while (i >= 0 && polygon[i].y == pt.y) --i;
+            if (i < 0) return PointInPolygonResult.IsOutside;
+
+            int val = 0;
+            bool isAbove = polygon[i].y < pt.y;
+            i = 0;
+
+            while (i < len)
+            {
+                if (isAbove)
+                {
+                    while (i < len && polygon[i].y < pt.y) i++;
+                    if (i == len) break;
+                }
+                else
+                {
+                    while (i < len && polygon[i].y > pt.y) i++;
+                    if (i == len) break;
+                }
+
+                long2 curr, prev;
+
+                curr = polygon[i];
+                if (i > 0) prev = polygon[i - 1];
+                else prev = polygon[len - 1];
+
+                if (curr.y == pt.y)
+                {
+                    if (curr.x == pt.x || (curr.y == prev.y &&
+                      ((pt.x < prev.x) != (pt.x < curr.x))))
+                        return PointInPolygonResult.IsOn;
+                    i++;
+                    continue;
+                }
+
+                if (pt.x < curr.x && pt.x < prev.x)
+                {
+                    // we're only interested in edges crossing on the left
+                }
+                else if (pt.x > prev.x && pt.x > curr.x)
+                {
+                    val = 1 - val; // toggle val
+                }
+                else
+                {
+                    double d = CrossProduct(prev, curr, pt);
+                    if (d == 0) return PointInPolygonResult.IsOn;
+                    if ((d < 0) == isAbove) val = 1 - val;
+                }
+                isAbove = !isAbove;
+                i++;
+            }
+            if (val == 0)
+                return PointInPolygonResult.IsOutside;
+            else
+                return PointInPolygonResult.IsInside;
+        }
+
     } //InternalClipperFuncs
 } //namespace

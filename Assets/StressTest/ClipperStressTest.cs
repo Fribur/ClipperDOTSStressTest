@@ -18,7 +18,7 @@ public enum ClipperTestType
 public struct ClipperStressTest : IComponentData
 {
     public ClipperTestType clipperTestType;
-    public int edgeCount;
+    //public int edgeCount;
 }
 
 

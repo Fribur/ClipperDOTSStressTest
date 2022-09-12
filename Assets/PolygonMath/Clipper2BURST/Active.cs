@@ -1,39 +1,31 @@
-﻿/*******************************************************************************
-* Author    :  Angus Johnson                                                   *
-* Version   :  10.0 (beta) - also known as Clipper2                            *
-* Date      :  8 May 2022                                                      *
-* Website   :  http://www.angusj.com                                           *
-* Copyright :  Angus Johnson 2010-2022                                         *
-* Purpose   :  This is the main polygon clipping module                        *
-* Thanks    :  Special thanks to Thong Nguyen, Guus Kuiper, Phil Stopford,     *
-*           :  and Daniel Gosnell for their invaluable assistance with C#.     *
-* License   :  http://www.boost.org/LICENSE_1_0.txt                            *
-*******************************************************************************/
-
-using Unity.Collections;
+﻿using Unity.Collections;
 
 namespace PolygonMath.Clipping.Clipper2LibBURST
 {
-    //ActiveLL: a linked list of edges that that may or may not be 'hot' (part of the clip solution).
+    ///////////////////////////////////////////////////////////////////
+    // Important: UP and DOWN here are premised on Y-axis positive down
+    // displays, which is the orientation used in Clipper's development.
+    ///////////////////////////////////////////////////////////////////
+
     public struct ActiveLL
     {
         public NativeList<long2> bot;
         public NativeList<long2> top;
-        public NativeList<long> curX;  //current (updated at every new scanline)
+        public NativeList<long> curX;  // current (updated at every new scanline)
         public NativeList<double> dx;
-        public NativeList<int> windDx;  //1 or -1 depending on winding direction
-        public NativeList<int> windCount;  //1 or -1 depending on winding direction
-        public NativeList<int> windCount2;  //1 or -1 depending on winding direction
+        public NativeList<int> windDx;  // 1 or -1 depending on winding direction
+        public NativeList<int> windCount;
+        public NativeList<int> windCount2;  // winding count of the opposite polytype
         public NativeList<int> outrec;
 
-        //AEL: 'active edge list' (Vatti's AET - active edge table)
+        // AEL: 'active edge list' (Vatti's AET - active edge table)
         //     a linked list of all edges (from left to right) that are present
         //     (or 'active') within the current scanbeam (a horizontal 'beam' that
         //     sweeps from bottom to top over the paths in the clipping operation).
         public NativeList<int> prevInAEL;
         public NativeList<int> nextInAEL;
 
-        //SEL: 'sorted edge list' (Vatti's ST - sorted table)
+        // SEL: 'sorted edge list' (Vatti's ST - sorted table)
         //     linked list used when sorting edges into their new positions at the
         //     top of scanbeams, but also (re)used to process horizontals.
         public NativeList<int> prevInSEL;
@@ -41,7 +33,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         public NativeList<int> jump;
         public NativeList<int> vertexTop;
         public NativeList<int> localMin;
-        internal NativeList<bool> leftBound;
+        internal NativeList<bool> isLeftBound;
         public bool IsCreated;
 
         public ActiveLL(int size, Allocator allocator)
@@ -61,7 +53,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             jump = new NativeList<int>(size, allocator);
             vertexTop = new NativeList<int>(size, allocator);
             localMin = new NativeList<int>(size, allocator);
-            leftBound = new NativeList<bool>(size, allocator);
+            isLeftBound = new NativeList<bool>(size, allocator);
             IsCreated = true;
         }
         public int AddActive(Active ae)
@@ -82,7 +74,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             jump.Add(-1);
             vertexTop.Add(ae.vertexTop);
             localMin.Add(ae.locMin_ID);
-            leftBound.Add(ae.leftBound);
+            isLeftBound.Add(ae.isleftBound);
 
             return current;
         }
@@ -104,7 +96,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             if (jump.IsCreated) jump.Dispose();
             if (vertexTop.IsCreated) vertexTop.Dispose();
             if (localMin.IsCreated) localMin.Dispose();
-            if (leftBound.IsCreated) leftBound.Dispose();
+            if (isLeftBound.IsCreated) isLeftBound.Dispose();
             IsCreated = false;
         }
         public void Clear()
@@ -124,7 +116,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             if (jump.IsCreated) jump.Clear();
             if (vertexTop.IsCreated) vertexTop.Clear();
             if (localMin.IsCreated) localMin.Clear();
-            if (leftBound.IsCreated) leftBound.Clear();
+            if (isLeftBound.IsCreated) isLeftBound.Clear();
 
         }
     };
@@ -141,7 +133,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         public int vertexTop;
         public int outrec;
         public int locMin_ID;
-        internal bool leftBound;
+        internal bool isleftBound;
         public Active(long curX)
         {
             bot = default;
@@ -154,7 +146,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             vertexTop = default;
             outrec = -1;
             locMin_ID = -1;
-            leftBound = false;
+            isleftBound = false;
         }
     };
 

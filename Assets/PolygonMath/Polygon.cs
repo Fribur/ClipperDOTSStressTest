@@ -26,7 +26,7 @@ namespace PolygonMath
             orientations = new NativeList<PolyOrientation>(Components, allocator);
             IsCreated = true;
         }
-        public Polygon(ref NativeArray<int2> nodes, ref NativeArray<int> startIDs, Allocator allocator)
+        public Polygon(in NativeArray<int2> nodes, in NativeArray<int> startIDs, Allocator allocator)
         {
             this.nodes = new NativeList<double2>(nodes.Length, allocator);
             for (int i = 0, length = nodes.Length; i < length; i++)
@@ -39,6 +39,18 @@ namespace PolygonMath
             for (int i = 0, length = startIDs.Length - 1; i < length; i++)
                 orientations.Add(PolyOrientation.None);
 
+            IsCreated = true;
+        }
+        public Polygon(in Polygon sourcePoly, Allocator allocator)
+        {
+            this.nodes = new NativeList<double2>(sourcePoly.nodes.Length, allocator);
+            this.nodes.AddRange(sourcePoly.nodes);
+
+            this.startIDs = new NativeList<int>(sourcePoly.startIDs.Length, allocator);
+            this.startIDs.AddRange(sourcePoly.startIDs);
+
+            this.orientations = new NativeList<PolyOrientation>(sourcePoly.orientations.Length, allocator);
+            this.orientations.AddRange(sourcePoly.orientations);
             IsCreated = true;
         }
         public void AddComponent(NativeList<double2> points)
@@ -67,12 +79,6 @@ namespace PolygonMath
             for (int i = start; i < end; i++)
                 nodes.Add(points[i]);
         }
-
-        public void ClosePolygon()
-        {
-            if (startIDs.Length > 0 && startIDs[startIDs.Length - 1] != nodes.Length)
-                startIDs.Add(nodes.Length);
-        }
         public void AddComponent()
         {
             startIDs.Add(nodes.Length);
@@ -90,6 +96,11 @@ namespace PolygonMath
             if (!GeoHelper.Equals(polygon.nodes[start], polygon.nodes[end - 1]))
                 nodes.Add(polygon.nodes[start]); //close the component
         }
+        public void ClosePolygon()
+        {
+            if (startIDs.Length > 0 && startIDs[startIDs.Length - 1] != nodes.Length)
+                startIDs.Add(nodes.Length);
+        }               
         public void Dispose()
         {
             if (nodes.IsCreated) nodes.Dispose();

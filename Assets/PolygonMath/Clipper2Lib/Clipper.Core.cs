@@ -1,7 +1,7 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
-* Version   :  10.0 (beta) - also known as Clipper2                            *
-* Date      :  10 May 2022                                                     *
+* Version   :  Clipper2 - ver.1.0.3                                            *
+* Date      :  23 August 2022                                                  *
 * Website   :  http://www.angusj.com                                           *
 * Copyright :  Angus Johnson 2010-2022                                         *
 * Purpose   :  Core structures and functions for the Clipper Library           *
@@ -9,6 +9,8 @@
 *******************************************************************************/
 
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace Clipper2Lib
 {
@@ -52,14 +54,14 @@ namespace Clipper2Lib
     {
       X = (long) Math.Round(pt.x);
       Y = (long) Math.Round(pt.y);
-      Z = (long) Math.Round(pt.z);
+      Z = pt.z;
     }
 
     public Point64(PointD pt, double scale)
     {
       X = (long) Math.Round(pt.x * scale);
       Y = (long) Math.Round(pt.y * scale);
-      Z = (long) Math.Round(pt.z * scale);
+      Z = pt.z;
     }
 
     public static bool operator ==(Point64 lhs, Point64 rhs)
@@ -80,6 +82,11 @@ namespace Clipper2Lib
     public static Point64 operator -(Point64 lhs, Point64 rhs)
     {
       return new Point64(lhs.X - rhs.X, lhs.Y - rhs.Y, lhs.Z - rhs.Z);
+    }
+
+    public override string ToString()
+    {
+      return $"{X},{Y},{Z} "; // nb: trailing space
     }
 
 #else
@@ -138,18 +145,17 @@ namespace Clipper2Lib
     {
       return new Point64(lhs.X - rhs.X, lhs.Y - rhs.Y);
     }
+    public override string ToString()
+    {
+      return $"{X},{Y} "; // nb: trailing space
+    }
+
 #endif
     public override bool Equals(object obj)
     {
       if (obj is Point64 p)
         return this == p;
-      else
-        return false;
-    }
-
-    public override string ToString()
-    {
-      return $"({X},{Y})";
+      return false;
     }
 
     public override int GetHashCode() { return 0; }
@@ -161,7 +167,7 @@ namespace Clipper2Lib
     public double y;
 
 #if USINGZ
-    public double z;
+    public long z;
 
     public PointD(PointD pt)
     {
@@ -181,14 +187,14 @@ namespace Clipper2Lib
     {
       x = pt.X * scale;
       y = pt.Y * scale;
-      z = pt.Z * scale;
+      z = pt.Z;
     }
 
     public PointD(PointD pt, double scale)
     {
       x = pt.x * scale;
       y = pt.y * scale;
-      z = pt.z * scale;
+      z = pt.z;
     }
 
     public PointD(long x, long y, long z = 0)
@@ -198,11 +204,16 @@ namespace Clipper2Lib
       this.z = z;
     }
 
-    public PointD(double x, double y, double z = 0)
+    public PointD(double x, double y, long z = 0)
     {
       this.x = x;
       this.y = y;
       this.z = z;
+    }
+
+    public override string ToString()
+    {
+      return $"{x:F},{y:F},{z} ";
     }
 
 #else
@@ -242,34 +253,29 @@ namespace Clipper2Lib
       this.y = y;
     }
 
-#endif
-
-    private static bool IsAlmostZero(double value)
+    public override string ToString()
     {
-      return (Math.Abs(value) <= 1E-15);
+      return $"{x:F},{y:F} ";
     }
 
+#endif
     public static bool operator ==(PointD lhs, PointD rhs)
     {
-      return IsAlmostZero(lhs.x - rhs.x) && IsAlmostZero(lhs.y - rhs.y);
+      return InternalClipper.IsAlmostZero(lhs.x - rhs.x) && 
+        InternalClipper.IsAlmostZero(lhs.y - rhs.y);
     }
 
     public static bool operator !=(PointD lhs, PointD rhs)
     {
-      return !IsAlmostZero(lhs.x - rhs.x) || !IsAlmostZero(lhs.y - rhs.y);
+      return !InternalClipper.IsAlmostZero(lhs.x - rhs.x) || 
+        !InternalClipper.IsAlmostZero(lhs.y - rhs.y);
     }
 
     public override bool Equals(object obj)
     {
       if (obj is PointD p)
         return this == p;
-      else
-        return false;
-    }
-
-    public override string ToString()
-    {
-      return $"{x:F},{y:F} ";
+      return false;
     }
 
     public override int GetHashCode() { return 0; }
@@ -314,6 +320,25 @@ namespace Clipper2Lib
     {
       return bottom <= top || right <= left;
     }
+
+    public Point64 MidPoint()
+    {
+      return new Point64((left + right) /2, (top + bottom)/2);
+    }
+
+    public bool Contains(Point64 pt)
+    {
+      return pt.X > left && pt.X < right &&
+        pt.Y > top && pt.Y < bottom;
+    }
+
+    public bool Contains(Rect64 rec)
+    {
+      return rec.left >= left && rec.right <= right &&
+        rec.top >= top && rec.bottom <= bottom;
+    }
+
+
   }
 
   public struct RectD
@@ -355,9 +380,21 @@ namespace Clipper2Lib
     {
       return bottom <= top || right <= left;
     }
+
+    public PointD MidPoint()
+    {
+      return new PointD((left + right) / 2, (top + bottom) / 2);
+    }
+
+    public bool PtIsInside(PointD pt)
+    {
+      return pt.x > left && pt.x < right &&
+        pt.y > top && pt.y < bottom;
+    }
+
   }
 
-  //Note: all clipping operations except for Difference are commutative.
+  // Note: all clipping operations except for Difference are commutative.
   public enum ClipType
   {
     None,
@@ -373,9 +410,9 @@ namespace Clipper2Lib
     Clip
   };
 
-  //By far the most widely used filling rules for polygons are EvenOdd
-  //and NonZero, sometimes called Alternate and Winding respectively.
-  //https://en.wikipedia.org/wiki/Nonzero-rule
+  // By far the most widely used filling rules for polygons are EvenOdd
+  // and NonZero, sometimes called Alternate and Winding respectively.
+  // https://en.wikipedia.org/wiki/Nonzero-rule
   public enum FillRule
   {
     EvenOdd,
@@ -384,7 +421,7 @@ namespace Clipper2Lib
     Negative
   };
 
-  //PointInPolygon
+  // PointInPolygon
   internal enum PipResult
   {
     Inside,
@@ -392,39 +429,47 @@ namespace Clipper2Lib
     OnEdge
   };
 
-  internal enum OutRecState
+  public static class InternalClipper
   {
-    Undefined,
-    Open,
-    Outer,
-    Inner
-  };
 
-  public static class InternalClipperFunc
-  {
-    public const double floatingPointTolerance = 1E-15;
-    public const double defaultMinimumEdgeLength = 0.1;
+    internal const double floatingPointTolerance = 1E-12;
+    internal const double defaultMinimumEdgeLength = 0.1;
 
-    public static double CrossProduct(Point64 pt1, Point64 pt2, Point64 pt3)
+    internal static bool IsAlmostZero(double value)
     {
-      //typecast to double to avoid potential int overflow
+      return (Math.Abs(value) <= floatingPointTolerance);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static double CrossProduct(Point64 pt1, Point64 pt2, Point64 pt3)
+    {
+      // typecast to double to avoid potential int overflow
       return ((double) (pt2.X - pt1.X) * (pt3.Y - pt2.Y) -
               (double) (pt2.Y - pt1.Y) * (pt3.X - pt2.X));
     }
 
-    public static double DotProduct(Point64 pt1, Point64 pt2, Point64 pt3)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static double DotProduct(Point64 pt1, Point64 pt2, Point64 pt3)
     {
-      //typecast to double to avoid potential int overflow
+      // typecast to double to avoid potential int overflow
       return ((double) (pt2.X - pt1.X) * (pt3.X - pt2.X) +
               (double) (pt2.Y - pt1.Y) * (pt3.Y - pt2.Y));
     }
 
-    public static double DotProduct(PointD vec1, PointD vec2)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static double CrossProduct(PointD vec1, PointD vec2)
+    {
+      return (vec1.y * vec2.x - vec2.y * vec1.x);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static double DotProduct(PointD vec1, PointD vec2)
     {
       return (vec1.x * vec2.x + vec1.y * vec2.y);
     }
 
-    public static bool GetIntersectPoint(Point64 ln1a, Point64 ln1b, Point64 ln2a, Point64 ln2b, out PointD ip)
+    internal static bool GetIntersectPoint(Point64 ln1a, 
+      Point64 ln1b, Point64 ln2a, Point64 ln2b, out PointD ip)
     {
       ip = new PointD();
       double m1, b1, m2, b2;
@@ -464,7 +509,8 @@ namespace Clipper2Lib
       return true;
     }
 
-    public static bool SegmentsIntersect(Point64 seg1a, Point64 seg1b, Point64 seg2a, Point64 seg2b)
+    internal static bool SegmentsIntersect(Point64 seg1a, 
+      Point64 seg1b, Point64 seg2a, Point64 seg2b)
     {
       double dx1 = seg1a.X - seg1b.X;
       double dy1 = seg1a.Y - seg1b.Y;
@@ -477,5 +523,70 @@ namespace Clipper2Lib
         dx2 * (seg1a.Y - seg2a.Y)) * (dy2 * (seg1b.X - seg2a.X) -
         dx2 * (seg1b.Y - seg2a.Y)) < 0));
     }
-  } //InternalClipperFuncs
-} //namespace
+
+    public static PointInPolygonResult PointInPolygon(Point64 pt, List<Point64> polygon)
+    {
+      int len = polygon.Count, i = len - 1;
+
+      if (len < 3) return PointInPolygonResult.IsOutside;
+
+      while (i >= 0 && polygon[i].Y == pt.Y) --i;
+      if (i < 0) return PointInPolygonResult.IsOutside;
+
+      int val = 0;
+      bool isAbove = polygon[i].Y < pt.Y;
+      i = 0;
+
+      while (i < len)
+      {
+        if (isAbove)
+        {
+          while (i < len && polygon[i].Y < pt.Y) i++;
+          if (i == len) break;
+        }
+        else
+        {
+          while (i < len && polygon[i].Y > pt.Y) i++;
+          if (i == len) break;
+        }
+
+        Point64 prev;
+
+        Point64 curr = polygon[i];
+        if (i > 0) prev = polygon[i - 1];
+        else prev = polygon[len - 1];
+
+        if (curr.Y == pt.Y)
+        {
+          if (curr.X == pt.X || (curr.Y == prev.Y &&
+            ((pt.X < prev.X) != (pt.X < curr.X))))
+            return PointInPolygonResult.IsOn;
+          i++;
+          continue;
+        }
+
+        if (pt.X < curr.X && pt.X < prev.X)
+        {
+          // we're only interested in edges crossing on the left
+        }
+        else if (pt.X > prev.X && pt.X > curr.X)
+        {
+          val = 1 - val; // toggle val
+        }
+        else
+        {
+          double d = CrossProduct(prev, curr, pt);
+          if (d == 0) return PointInPolygonResult.IsOn;
+          if ((d < 0) == isAbove) val = 1 - val;
+        }
+        isAbove = !isAbove;
+        i++;
+      }
+      if (val == 0)
+        return PointInPolygonResult.IsOutside;
+      return PointInPolygonResult.IsInside;
+    }
+
+  } // InternalClipper
+
+} // namespace

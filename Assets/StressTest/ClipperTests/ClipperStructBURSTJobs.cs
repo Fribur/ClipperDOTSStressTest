@@ -35,7 +35,11 @@ public partial class ClipperStructBURSTJobs : SystemBase
         NativeArray<JobHandle> jobHandles = new NativeArray<JobHandle>(11, Allocator.TempJob);
         for (int i = 0; i < 10; i++)
         {
-            jobHandles[i] = Job.WithBurst().WithReadOnly(L_subj).WithReadOnly(L_clip).WithCode(() =>
+            jobHandles[i] = Job
+                .WithBurst()
+                .WithReadOnly(L_subj)
+                .WithReadOnly(L_clip)
+                .WithCode(() =>
             {
                 Polygon _solution = new Polygon(2000, Allocator.Temp);
                 ClipperD c = new ClipperD(Allocator.Temp);
