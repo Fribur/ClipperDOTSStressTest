@@ -6,21 +6,18 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
     {
         public NativeArray<TreeNode> components;
         public NativeList<int> exteriorIDs;
-        public bool GetNextComponent(int parentID, out TreeNode nextNode, out int nextID)
+        public bool GetNextComponent(int parentID, out int nextID)
         {
-            nextNode = default;
             nextID = components[parentID].childID;
             if (nextID != -1) //first try to go deep (to next child)
             {
                 //Debug.Log("Go to child");
-                nextNode = components[nextID];
                 return true;
             }
             nextID = components[parentID].rightID; //if that fails, try to go sideways (to next sibling)
             if (nextID != -1)
             {
                 //Debug.Log("Go right");
-                nextNode = components[nextID];
                 return true;
             }
             //if that fails, try to go to parent, check if right sibling exists, if not repeat until either parent is root (-1) or rightID exists
@@ -33,13 +30,11 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             if (nextID != -1) //return the next sibling that was found
             {
                 //Debug.Log("Go Up-->right");
-                nextNode = components[nextID];
                 return true;
             }
             if (parentID != -1) //last resort, return parent
             {
                 //Debug.Log("Go Up-->parent");
-                nextNode = components[parentID];
                 return true;
             }
             return false;

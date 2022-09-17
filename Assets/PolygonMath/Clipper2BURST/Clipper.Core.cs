@@ -30,8 +30,8 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
 
         public long2(double2 pt)
         {
-            x = (long) math.round(pt.x);
-            y = (long) math.round(pt.y);
+            x = (long)math.round(pt.x);
+            y = (long)math.round(pt.y);
         }
         public long2(long2 pt, double scale)
         {
@@ -41,16 +41,16 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
 
         public long2(double2 pt, double scale)
         {
-            x = (long) math.round(pt.x * scale);
-            y = (long) math.round(pt.y * scale);
+            x = (long)math.round(pt.x * scale);
+            y = (long)math.round(pt.y * scale);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool operator ==(long2 lhs, long2 rhs) { return lhs.x == rhs.x && lhs.y == rhs.y;}
+        public static bool operator ==(long2 lhs, long2 rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator !=(long2 lhs, long2 rhs) { return lhs.x != rhs.x || lhs.y != rhs.y; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static long2 operator +(long2 lhs, long2 rhs)  { return new long2(lhs.x + rhs.x, lhs.y + rhs.y); }
+        public static long2 operator +(long2 lhs, long2 rhs) { return new long2(lhs.x + rhs.x, lhs.y + rhs.y); }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static long2 operator -(long2 lhs, long2 rhs) { return new long2(lhs.x - rhs.x, lhs.y - rhs.y); }
@@ -70,14 +70,14 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             return $"({x},{y})";
         }
 
-        public override int GetHashCode() 
+        public override int GetHashCode()
         {
             int hash = 17;
             hash = hash * 29 + (int)x;
             hash = hash * 29 + (int)y;
-            return hash; 
+            return hash;
         }
-    } 
+    }
     public struct Rect64
     {
         public long left;
@@ -179,14 +179,14 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         public static double CrossProduct(long2 pt1, long2 pt2, long2 pt3)
         {
             //typecast to double to avoid potential int overflow
-            return ((double) (pt2.x - pt1.x) * (pt3.y - pt2.y) -
-                    (double) (pt2.y - pt1.y) * (pt3.x - pt2.x));
+            return ((double)(pt2.x - pt1.x) * (pt3.y - pt2.y) -
+                    (double)(pt2.y - pt1.y) * (pt3.x - pt2.x));
         }
         public static double DotProduct(long2 pt1, long2 pt2, long2 pt3)
         {
             //typecast to double to avoid potential int overflow
-            return ((double) (pt2.x - pt1.x) * (pt3.x - pt2.x) +
-                    (double) (pt2.y - pt1.y) * (pt3.y - pt2.y));
+            return ((double)(pt2.x - pt1.x) * (pt3.x - pt2.x) +
+                    (double)(pt2.y - pt1.y) * (pt3.y - pt2.y));
         }
 
         public static double DotProduct(double2 vec1, double2 vec2)
@@ -246,69 +246,87 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 dx2 * (seg1a.y - seg2a.y)) * (dy2 * (seg1b.x - seg2a.x) -
                 dx2 * (seg1b.y - seg2a.y)) < 0));
         }
-        public static PointInPolygonResult PointInPolygon(long2 pt, List<long2> polygon)
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int PointCount(in OutPtLL outPtList, int op)
         {
-            int len = polygon.Count, i = len - 1;
-
-            if (len < 3) return PointInPolygonResult.IsOutside;
-
-            while (i >= 0 && polygon[i].y == pt.y) --i;
-            if (i < 0) return PointInPolygonResult.IsOutside;
-
-            int val = 0;
-            bool isAbove = polygon[i].y < pt.y;
-            i = 0;
-
-            while (i < len)
+            int p = op;
+            int cnt = 0;
+            do
             {
-                if (isAbove)
+                cnt++;
+                p = outPtList.next[p];
+            } while (p != op);
+            return cnt;
+        }
+        public static PointInPolygonResult PointInPolygon(long2 pt, ref OutPtLL outptLL, int startOp)
+        {
+            if (outptLL.next[startOp] == startOp || outptLL.next[startOp] == outptLL.prev[startOp])
+                return PointInPolygonResult.IsOutside;
+
+            int curr = startOp, prev = outptLL.prev[curr];
+            while (outptLL.pt[prev].y == pt.y)
+            {
+                if (prev == startOp) return PointInPolygonResult.IsOutside;
+                prev = outptLL.prev[prev];
+            }
+
+            bool is_above = outptLL.pt[prev].y < pt.y;
+            outptLL.next[outptLL.prev[startOp]] = -1; // temporary !!!
+            int val = 0;
+            do
+            {
+                if (is_above)
                 {
-                    while (i < len && polygon[i].y < pt.y) i++;
-                    if (i == len) break;
+                    while (curr != -1 && outptLL.pt[curr].y < pt.y) curr = outptLL.next[curr];
+                    if (curr == -1) break;
                 }
                 else
                 {
-                    while (i < len && polygon[i].y > pt.y) i++;
-                    if (i == len) break;
+                    while (curr != -1 && outptLL.pt[curr].y > pt.y) curr = outptLL.next[curr];
+                    if (curr == -1) break;
                 }
+                prev = outptLL.prev[curr];
 
-                long2 curr, prev;
-
-                curr = polygon[i];
-                if (i > 0) prev = polygon[i - 1];
-                else prev = polygon[len - 1];
-
-                if (curr.y == pt.y)
+                if (outptLL.pt[curr].y == pt.y)
                 {
-                    if (curr.x == pt.x || (curr.y == prev.y &&
-                      ((pt.x < prev.x) != (pt.x < curr.x))))
+                    if (outptLL.pt[curr].x == pt.x || (outptLL.pt[curr].y == outptLL.pt[prev].y &&
+                      ((pt.x < outptLL.pt[prev].x) != (pt.x < outptLL.pt[curr].x))))
+                    {
+                        outptLL.next[outptLL.prev[startOp]] = startOp; // reestablish the link
                         return PointInPolygonResult.IsOn;
-                    i++;
+                    }
+                    curr = outptLL.next[curr];
                     continue;
                 }
 
-                if (pt.x < curr.x && pt.x < prev.x)
+                if (pt.x < outptLL.pt[curr].x && pt.x < outptLL.pt[prev].x)
                 {
                     // we're only interested in edges crossing on the left
                 }
-                else if (pt.x > prev.x && pt.x > curr.x)
-                {
+                else if (pt.x > outptLL.pt[prev].x && pt.x > outptLL.pt[curr].x)
                     val = 1 - val; // toggle val
-                }
                 else
                 {
-                    double d = CrossProduct(prev, curr, pt);
-                    if (d == 0) return PointInPolygonResult.IsOn;
-                    if ((d < 0) == isAbove) val = 1 - val;
+                    double d = InternalClipperFunc.CrossProduct(outptLL.pt[prev], outptLL.pt[curr], pt);
+                    if (d == 0)
+                    {
+                        outptLL.next[outptLL.prev[startOp]] = startOp; // reestablish the link
+                        return PointInPolygonResult.IsOn;
+                    }
+                    if ((d < 0) == is_above) val = 1 - val;
                 }
-                isAbove = !isAbove;
-                i++;
-            }
-            if (val == 0)
-                return PointInPolygonResult.IsOutside;
-            else
-                return PointInPolygonResult.IsInside;
+                is_above = !is_above;
+                curr = outptLL.next[curr];
+
+            } while (curr != -1);
+
+            outptLL.next[outptLL.prev[startOp]] = startOp;
+            return val == 0 ?
+              PointInPolygonResult.IsOutside :
+              PointInPolygonResult.IsInside;
         }
+
 
     } //InternalClipperFuncs
 } //namespace

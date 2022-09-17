@@ -21,23 +21,24 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         }
         public int AddVertex(long2 vertex, VertexFlags flag, bool firstVertex, int? firstVertexID=0)
         {
-            int current = pt.Length;
+            int currentID = pt.Length;
             pt.Add(vertex);
             flags.Add(flag);
             
             if (!firstVertex)
             {
+                int prevID = currentID - 1;
                 next.Add((int)firstVertexID); //extend NextList, set Next of Tail to Head
-                prev.Add(current - 1); //extend PrevList, set point current index to Prev index
-                next[current - 1] = current;
-                prev[(int)firstVertexID] = current; //set Prev of Head to Tail
+                prev.Add(prevID); //extend PrevList, set point current index to Prev index
+                next[prevID] = currentID;
+                prev[(int)firstVertexID] = currentID; //set Prev of Head to Tail
             }
             else
             {
-                prev.Add(current);
-                next.Add(current);
+                prev.Add(currentID);
+                next.Add(currentID);
             }
-            return current;
+            return currentID;
         }
 
         public void Dispose()

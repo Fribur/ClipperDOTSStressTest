@@ -8,6 +8,7 @@ using PolygonMath.Clipping;
 
 public partial class ClipperStructBURST : SystemBase
 {
+    //ClipperD c;
     private Polygon _subj;
     private Polygon _clip;
     private const int DisplayWidth = 800;
@@ -16,11 +17,13 @@ public partial class ClipperStructBURST : SystemBase
 
     protected override void OnCreate()
     {
+        //c = new ClipperD(Allocator.Persistent);
         StaticHelper.GenerateRandomPolygon(new Random(1337), DisplayWidth, DisplayHeight, EdgeCount, out _subj, out _clip);
         RequireSingletonForUpdate<ClipperStressTest>();
     }
     protected override void OnDestroy()
     {
+        //c.Dispose();
         if (_subj.IsCreated) _subj.Dispose();
         if (_clip.IsCreated) _clip.Dispose();
     }
@@ -32,16 +35,17 @@ public partial class ClipperStructBURST : SystemBase
 
         var L_subj = _subj;
         var L_clip = _clip;
+        //var L_c = c;
         Job.WithBurst().WithCode(() =>
         {
-            ClipperD c = new ClipperD(Allocator.Temp);
+            ClipperD L_c = new ClipperD(Allocator.Temp);
             Polygon _solution = new Polygon(2000, Allocator.Temp);
             for (int i = 0; i < 10; i++)
             {
-                c.AddSubject(L_subj);
-                c.AddClip(L_clip);
-                c.Execute(ClipType.Intersection, FillRule.NonZero, ref _solution);
-                c.Clear();
+                L_c.AddSubject(L_subj);
+                L_c.AddClip(L_clip);
+                L_c.Execute(ClipType.Intersection, FillRule.NonZero, ref _solution);
+                L_c.Clear();
                 _solution.Clear();
             }
         }).Schedule();

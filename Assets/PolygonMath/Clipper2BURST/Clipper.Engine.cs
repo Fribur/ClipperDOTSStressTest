@@ -127,7 +127,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 prev = actives.prevInAEL[prev];
             return prev;
         }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsFront(int ae)
         {
             return (ae == outrecList.frontEdge[actives.outrec[ae]]);
@@ -206,25 +206,27 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             var ae1Bot = actives.bot[ae1];
             var ae2Bot = actives.bot[ae2];
             if (InternalClipperFunc.IsAlmostZero(ae1Dx - ae2Dx)) return actives.top[ae1];
+
             if (InternalClipperFunc.IsAlmostZero(ae1Dx))
             {
                 if (IsHorizontal(ae2)) return new long2(ae1Bot.x, ae2Bot.y);
                 b2 = ae2Bot.y - (ae2Bot.x / ae2Dx);
                 return new long2(ae1Bot.x, (long)math.round(ae1Bot.x / ae2Dx + b2));
             }
+
             if (InternalClipperFunc.IsAlmostZero(ae2Dx))
             {
                 if (IsHorizontal(ae1)) return new long2(ae2Bot.x, ae1Bot.y);
                 b1 = ae1Bot.y - (ae1Bot.x / ae1Dx);
                 return new long2(ae2Bot.x, (long)math.round(ae2Bot.x / ae1Dx + b1));
-            }           
+            }
             b1 = ae1Bot.x - ae1Bot.y * ae1Dx;
             b2 = ae2Bot.x - ae2Bot.y * ae2Dx;
             double q = (b2 - b1) / (ae1Dx - ae2Dx);
             return (math.abs(ae1Dx) < math.abs(ae2Dx))
                 ? new long2((long)math.round(ae1Dx * q + b1), (long)math.round(q))
                 : new long2((long)math.round(ae2Dx * q + b2), (long)math.round(q));
-        }        
+        }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void SetDx(ref Active ae)
         {
@@ -301,17 +303,21 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             }
             return -1;
         }
-        struct IntersectListSort : IComparer<IntersectNode>
+
+        public struct IntersectListSort : IComparer<IntersectNode>
         {
             public int Compare(IntersectNode a, IntersectNode b)
             {
                 if (a.pt.y == b.pt.y)
                 {
+                    if (a.pt.x == b.pt.x)
+                        return 0;
                     return a.pt.x < b.pt.x ? -1 : 1;
                 }
                 return a.pt.y > b.pt.y ? -1 : 1;
             }
         }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void SetSides(int outrec, int startEdge, int endEdge)
         {
@@ -373,7 +379,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             return (double)(pt3.y + pt1.y) * (pt3.x - pt1.x) +
               (double)(pt1.y + pt2.y) * (pt1.x - pt2.x) +
               (double)(pt2.y + pt3.y) * (pt2.x - pt3.x);
-        }        
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetRealOutRec(int outrec)
@@ -396,7 +402,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool OutrecIsAscending(int hotEdge)
         {
-            return (hotEdge  == outrecList.frontEdge[actives.outrec[hotEdge]]);
+            return (hotEdge == outrecList.frontEdge[actives.outrec[hotEdge]]);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -408,12 +414,12 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             outrecList.frontEdge[outrec] = outrecList.backEdge[outrec];
             outrecList.backEdge[outrec] = ae2;
             outrecList.pts[outrec] = outPtList.next[outrecList.pts[outrec]];
-        }        
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool EdgesAdjacentInAEL(IntersectNode inode)
         {
-            return actives.nextInAEL[inode.edge1] == inode.edge2 || actives.prevInAEL[inode.edge1] == inode.edge2;
+            return (actives.nextInAEL[inode.edge1] == inode.edge2) || (actives.prevInAEL[inode.edge1] == inode.edge2);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -423,7 +429,6 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             {
                 actives.Clear();
                 actives_ID = -1;
-                sel_ID = -1;
             }
             if (joinerList.IsCreated)
             {
@@ -466,8 +471,8 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             {
                 actives.Clear();
                 actives_ID = -1;
-                sel_ID = -1;
             }
+            sel_ID = -1;
             _succeeded = true;
         }
 
@@ -540,14 +545,13 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                         prev_v = v0;
                     }
                     else if (vertexList.pt[prev_v] != pt) // ie skips duplicates
-                    {
                         prev_v = vertexList.AddVertex(pt, VertexFlags.None, false, v0);
-                    }
                 }
                 if (prev_v == -1 || vertexList.prev[prev_v] == -1) continue;
-                if (!isOpen && vertexList.pt[prev_v] == vertexList.pt[v0]) prev_v = vertexList.prev[prev_v]; //this is not needed (Addvertex does this already)
-                vertexList.next[prev_v] = v0; //this is not needed (Addvertex does this already)
-                vertexList.prev[v0] = prev_v;//this is not needed (Addvertex does this already)
+                //the following eliminates the end point (identical with start) for closed polygons fropm the linked list
+                if (!isOpen && vertexList.pt[prev_v] == vertexList.pt[v0]) prev_v = vertexList.prev[prev_v]; 
+                vertexList.next[prev_v] = v0; 
+                vertexList.prev[v0] = prev_v;
                 if (!isOpen && vertexList.next[prev_v] == prev_v) continue;
 
                 // OK, we have a valid path
@@ -610,6 +614,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 }
             }
         }
+        
         void AddPathToVertexList(in NativeSlice<int2> nodes, PathType polytype, bool isOpen)
         {
             int totalVertCnt = nodes.Length;
@@ -702,7 +707,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddSubject(in Polygon paths)
         {
-            AddPaths(paths, PathType.Subject, false);
+            AddPaths(paths, PathType.Subject);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddOpenSubject(in Polygon paths)
@@ -712,7 +717,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddClip(in Polygon paths)
         {
-            AddPaths(paths, PathType.Clip, false);
+            AddPaths(paths, PathType.Clip);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddPath(in NativeSlice<int2> path, PathType polytype, bool isOpen = false)
@@ -888,7 +893,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void SetWindCountForOpenPathEdge(int ae)
         {
-            int ae2 = ae;
+            int ae2 = actives_ID;
             if (fillrule == FillRule.EvenOdd)
             {
                 int cnt1 = 0, cnt2 = 0;
@@ -917,6 +922,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsValidAelOrder(int resident, int newcomer)
         {
             var residentCurX = actives.curX[resident];
@@ -945,7 +951,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
 
             if (!IsMaxima(newcomer) && (newcomerTop.y > residentTop.y))
             {
-                return InternalClipperFunc.CrossProduct(newcomerBot, 
+                return InternalClipperFunc.CrossProduct(newcomerBot,
                     newcomerTop, vertexList.pt[NextVertex(newcomer)]) >= 0;
             }
 
@@ -957,7 +963,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             // resident must also have just been inserted
             if (actives.isLeftBound[resident] != newcomerIsLeft)
                 return newcomerIsLeft;
-            if (InternalClipperFunc.CrossProduct(vertexList.pt[PrevPrevVertex(resident)], 
+            if (InternalClipperFunc.CrossProduct(vertexList.pt[PrevPrevVertex(resident)],
                 residentBot, residentTop) == 0) return true;
             // compare turning direction of the alternate bound
             return (InternalClipperFunc.CrossProduct(vertexList.pt[PrevPrevVertex(resident)],
@@ -1276,7 +1282,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 result = outrecList.pts[outrec];
 
                 outrecList.owner[outrec] = GetRealOutRec(outrecList.owner[outrec]);
-                if(_using_polytree && outrecList.owner[outrec] != -1 && outrecList.frontEdge[outrecList.owner[outrec]] == -1)
+                if (_using_polytree && outrecList.owner[outrec] != -1 && outrecList.frontEdge[outrecList.owner[outrec]] == -1)
                     outrecList.owner[outrec] = GetRealOutRec(outrecList.owner[outrecList.owner[outrec]]);
             }
             // and to preserve the winding orientation of outrec ...
@@ -1287,7 +1293,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 else
                     JoinOutrecPaths(ae2, ae1);
             }
-            else  if (actives.outrec[ae1] < actives.outrec[ae2])
+            else if (actives.outrec[ae1] < actives.outrec[ae2])
                 JoinOutrecPaths(ae1, ae2);
             else
                 JoinOutrecPaths(ae2, ae1);
@@ -1315,7 +1321,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 outrecList.pts[ae1outrec] = p2Start;
                 // nb: if IsOpen(e1) then e1 & e2 must be a 'maximaPair'
                 outrecList.frontEdge[ae1outrec] = outrecList.frontEdge[ae2outrec];
-                if(outrecList.frontEdge[ae1outrec] != -1)
+                if (outrecList.frontEdge[ae1outrec] != -1)
                     actives.outrec[outrecList.frontEdge[ae1outrec]] = ae1outrec;
             }
             else
@@ -1332,7 +1338,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
 
             // an owner must have a lower idx otherwise
             // it won't be a valid owner
-            if (outrecList.owner[ae2outrec] != -1 && 
+            if (outrecList.owner[ae2outrec] != -1 &&
                 outrecList.owner[ae2outrec] < ae1outrec)
             {
                 if (outrecList.owner[ae1outrec] == -1 || outrecList.owner[ae2outrec] < outrecList.owner[ae1outrec])
@@ -1393,7 +1399,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             else
             {
                 //outrecList.frontEdge[outrec] = -1; //redudant because already set like this when adding
-                outrecList.backEdge[outrec] = ae; 
+                outrecList.backEdge[outrec] = ae;
             }
 
             actives.outrec[ae] = outrec;
@@ -1513,9 +1519,9 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             //UPDATE WINDING COUNTS...
 
             int oldE1WindCount, oldE2WindCount;
-            var ae1PathType= minimaList[actives.localMin[ae1]].polytype;
-            var ae2PathType = minimaList[actives.localMin[ae2]].polytype;
-            if (ae1PathType == ae2PathType)
+            var ae1PolyType = minimaList[actives.localMin[ae1]].polytype;
+            var ae2PolyType = minimaList[actives.localMin[ae2]].polytype;
+            if (ae1PolyType == ae2PolyType)
             {
                 if (fillrule == FillRule.EvenOdd)
                 {
@@ -1574,7 +1580,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             if (IsHotEdge(ae1) && IsHotEdge(ae2))
             {
                 if ((oldE1WindCount != 0 && oldE1WindCount != 1) || (oldE2WindCount != 0 && oldE2WindCount != 1) ||
-                    (ae1PathType != ae2PathType && cliptype != ClipType.Xor))
+                    (ae1PolyType != ae2PolyType && cliptype != ClipType.Xor))
                 {
                     resultOp = AddLocalMaxPoly(ae1, ae2, pt);
                 }
@@ -1690,13 +1696,12 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             sel_ID = ae;
             while (ae != -1)
             {
-                var nextInAEL = actives.nextInAEL[ae];
                 actives.prevInSEL[ae] = actives.prevInAEL[ae];
-                actives.nextInSEL[ae] = nextInAEL;
-                actives.jump[ae] = nextInAEL;
+                actives.nextInSEL[ae] = actives.nextInAEL[ae];
+                actives.jump[ae] = actives.nextInSEL[ae]; ;
                 actives.curX[ae] = TopX(ae, topY);
                 // NB don't update ae.curr.y yet (see AddNewIntersectNode)
-                ae = nextInAEL;
+                ae = actives.nextInAEL[ae]; 
             }
         }
 
@@ -1722,7 +1727,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 while (PopHorz(out ae)) DoHorizontal(ae);
             }
 
-            if(_succeeded) ProcessJoinList();
+            if (_succeeded) ProcessJoinList();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1771,21 +1776,20 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int ExtractFromSEL(int ae)
         {
-            var aeNextInSEL = actives.nextInSEL[ae];
-            var aePrevInSEL = actives.prevInSEL[ae];
-            if (aeNextInSEL != -1)
-                actives.prevInSEL[aeNextInSEL] = aePrevInSEL;
-            actives.nextInSEL[aePrevInSEL] = aeNextInSEL;
-            return aeNextInSEL;
+            int aePrevInSEL = actives.prevInSEL[ae];
+            int res = actives.nextInSEL[ae];
+            if (res != -1)
+                actives.prevInSEL[res] = aePrevInSEL;
+            actives.nextInSEL[aePrevInSEL] = res;
+            return res;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Insert1Before2InSEL(int ae1, int ae2)
         {
-            var ae2PrevInSEL = actives.prevInSEL[ae2];
-            actives.prevInSEL[ae1] = ae2PrevInSEL;
-            if (ae2PrevInSEL != -1)
-                actives.nextInSEL[ae2PrevInSEL] = ae1;
+            actives.prevInSEL[ae1] = actives.prevInSEL[ae2];
+            if (actives.prevInSEL[ae1] != -1)
+                actives.nextInSEL[actives.prevInSEL[ae1]] = ae1;
             actives.nextInSEL[ae1] = ae2;
             actives.prevInSEL[ae2] = ae1;
         }
@@ -1871,7 +1875,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                     int j = i + 1;
                     while (!EdgesAdjacentInAEL(intersectList[j])) j++;
                     // swap
-                    (intersectList[j], intersectList[i]) = 
+                    (intersectList[j], intersectList[i]) =
                             (intersectList[i], intersectList[j]); // IntersectNode n = intersectList[i]; //intersectList[i] = intersectList[j]; //intersectList[j] = n;                    
                 }
 
@@ -1898,18 +1902,15 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         void SwapPositionsInAEL(int ae1, int ae2)
         {
             // preconditon: ae1 must be immediately to the left of ae2
-            int ae2Next = actives.nextInAEL[ae2];
-            if (ae2Next != -1) actives.prevInAEL[ae2Next] = ae1;
-            int ae1Prev = actives.prevInAEL[ae1];
-            if (ae1Prev != -1) 
-                actives.nextInAEL[ae1Prev] = ae2;
-            else 
-                actives_ID = ae2;
-            actives.prevInAEL[ae2] = ae1Prev;
+            int next = actives.nextInAEL[ae2];
+            if (next != -1) actives.prevInAEL[next] = ae1;
+            int prev = actives.prevInAEL[ae1];
+            if (prev != -1) actives.nextInAEL[prev] = ae2;
+            actives.prevInAEL[ae2] = prev;
             actives.nextInAEL[ae2] = ae1;
             actives.prevInAEL[ae1] = ae2;
-            actives.nextInAEL[ae1] = ae2Next;
-            //if (actives.prevInAEL[ae2] == -1) actives_ID = ae2;
+            actives.nextInAEL[ae1] = next;
+            if (actives.prevInAEL[ae2] == -1) actives_ID = ae2;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1953,10 +1954,10 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             {
                 // always trim 180 deg. spikes (in closed paths)
                 // but otherwise break if preserveCollinear = true
-                if (!preserveCollinear &&
+                if (preserveCollinear &&
                 (pt.x < actives.top[horzEdge].x) != (actives.bot[horzEdge].x < actives.top[horzEdge].x))
                     break;
-            
+
                 actives.vertexTop[horzEdge] = NextVertex(horzEdge);
                 actives.top[horzEdge] = pt;
                 wasTrimmed = true;
@@ -2136,7 +2137,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                     DeleteFromAEL(horz); // ie open at top
                     return;
                 }
-                
+
                 if (vertexList.pt[NextVertex(horz)].y != actives.top[horz].y) break;
 
                 // there must be a following (consecutive) horizontal
@@ -2148,7 +2149,6 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                     TrimHorz(horz, true);
 
                 isLeftToRight = ResetHorzDirection(horz, maxPair, out leftX, out rightX);
-
 
             } // end for loop and end of (possible consecutive) horizontals
 
@@ -2204,15 +2204,13 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                         ae = DoMaxima(ae); // TOP OF BOUND (MAXIMA)
                         continue;
                     }
-                    else
-                    {
-                        // INTERMEDIATE VERTEX ...
-                        if (IsHotEdge(ae))
-                            AddOutPt(ae, aeTop);
-                        UpdateEdgeIntoAEL(ae);
-                        if (IsHorizontal(ae))
-                            PushHorz(ae); // horizontals are processed later
-                    }
+                    
+                    // INTERMEDIATE VERTEX ...
+                    if (IsHotEdge(ae))
+                        AddOutPt(ae, aeTop);
+                    UpdateEdgeIntoAEL(ae);
+                    if (IsHorizontal(ae))
+                        PushHorz(ae); // horizontals are processed later
                 }
                 else // i.e. not the top of the edge
                     actives.curX[ae] = TopX(ae, y);
@@ -2282,6 +2280,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
         {
             return (outPtList.next[op] != op);
         }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool AreReallyClose(long2 pt1, long2 pt2)
         {
@@ -2395,7 +2394,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                     return !((x1a <= x2b) || (x2a <= x1b));
                 return !((x1a <= x2a) || (x2b <= x1b));
             }
-            
+
             if (x1b > x1a + minOverlap)
             {
                 if (x2a > x2b + minOverlap)
@@ -2693,7 +2692,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                     if (GetHorzExtendedHorzSeg(ref op2a, out int op2b) &&
                     HorzEdgesOverlap(outPtList.pt[op1a].x, outPtList.pt[op1b].x, outPtList.pt[op2a].x, outPtList.pt[op2b].x))
                     {
-                        //overlap found so promote to a 'real' join
+                        // overlap found so promote to a 'real' join
                         var op1aPt = outPtList.pt[op1a];
                         var op1bPt = outPtList.pt[op1b];
                         var op2aPt = outPtList.pt[op2a];
@@ -2733,7 +2732,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 ((outPtList.next[op2] == op1) && (op2 != outrecList.pts[outPtList.outrec[op1]])))) return;
 
             var joiner = AddJoiner(op1, op2, -1);
-            joinerList.idx[joiner] = joinerList.idx.Length-1;
+            joinerList.idx[joiner] = joiner;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2828,7 +2827,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                     if (op == outrecList.pts[outRec]) outrecList.pts[outRec] = outPtList.prev[op];
                     op = DisposeOutPt(op);
                     op = outPtList.prev[op];
-                }                
+                }
                 else
                     break;
             }
@@ -2863,12 +2862,12 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             DeleteJoin(joiner);
 
             if (outrecList.pts[or2] == -1) return or1;
-            else if (!IsValidClosedPath(op2))
+            if (!IsValidClosedPath(op2))
             {
                 SafeDisposeOutPts(ref op2);
                 return or1;
             }
-            else if ((outrecList.pts[or1] == -1) || !IsValidClosedPath(op1))
+            if ((outrecList.pts[or1] == -1) || !IsValidClosedPath(op1))
             {
                 SafeDisposeOutPts(ref op1);
                 return or2;
@@ -2957,9 +2956,9 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                     }
                     break;
                 }
-                else if (op1NextPt == op2PrevPt ||
-                            ((InternalClipperFunc.CrossProduct(op1NextPt, outPtList.pt[op2], op2PrevPt) == 0) &&
-                            CollinearSegsOverlap(op1NextPt, outPtList.pt[op1], outPtList.pt[op2], op2PrevPt)))
+                if (op1NextPt == op2PrevPt ||
+                        ((InternalClipperFunc.CrossProduct(op1NextPt, outPtList.pt[op2], op2PrevPt) == 0) &&
+                        CollinearSegsOverlap(op1NextPt, outPtList.pt[op1], outPtList.pt[op2], op2PrevPt)))
                 {
                     if (or1 == or2)
                     {
@@ -3007,7 +3006,6 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                             {
                                 outrecList.owner[or1] = outrecList.owner[or2];
                             }
-
                             outrecList.owner[or2] = or1;
                         }
                         else
@@ -3020,32 +3018,31 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                             {
                                 outrecList.owner[or2] = outrecList.owner[or1];
                             }
-
                             outrecList.owner[or1] = or2;
                         }
                     }
                     break;
                 }
-                else if (PointBetween(op1NextPt, outPtList.pt[op2], op2PrevPt) &&
-                            DistanceFromLineSqrd(op1NextPt, outPtList.pt[op2], op2PrevPt) < 2.01)
+                if (PointBetween(op1NextPt, outPtList.pt[op2], op2PrevPt) &&
+                        DistanceFromLineSqrd(op1NextPt, outPtList.pt[op2], op2PrevPt) < 2.01)
                 {
                     InsertOp(op1NextPt, outPtList.prev[op2]);
                     continue;
                 }
-                else if (PointBetween(op2NextPt, outPtList.pt[op1], op1PrevPt) &&
-                            DistanceFromLineSqrd(op2NextPt, outPtList.pt[op1], op1PrevPt) < 2.01)
+                if (PointBetween(op2NextPt, outPtList.pt[op1], op1PrevPt) &&
+                        DistanceFromLineSqrd(op2NextPt, outPtList.pt[op1], op1PrevPt) < 2.01)
                 {
                     InsertOp(op2NextPt, outPtList.prev[op1]);
                     continue;
                 }
-                else if (PointBetween(op1PrevPt, outPtList.pt[op2], op2NextPt) &&
-                            DistanceFromLineSqrd(op1PrevPt, outPtList.pt[op2], op2NextPt) < 2.01)
+                if (PointBetween(op1PrevPt, outPtList.pt[op2], op2NextPt) &&
+                        DistanceFromLineSqrd(op1PrevPt, outPtList.pt[op2], op2NextPt) < 2.01)
                 {
                     InsertOp(op1PrevPt, op2);
                     continue;
                 }
-                else if (PointBetween(op2PrevPt, outPtList.pt[op1], op1NextPt) &&
-                            DistanceFromLineSqrd(op2PrevPt, outPtList.pt[op1], op1NextPt) < 2.01)
+                if (PointBetween(op2PrevPt, outPtList.pt[op1], op1NextPt) &&
+                        DistanceFromLineSqrd(op2PrevPt, outPtList.pt[op1], op1NextPt) < 2.01)
                 {
                     InsertOp(op2PrevPt, op1);
                     continue;
@@ -3053,31 +3050,28 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
 
                 //something odd needs tidying up
                 if (CheckDisposeAdjacent(ref op1, op2, or1)) continue;
-                else if (CheckDisposeAdjacent(ref op2, op1, or1)) continue;
-                else if (op1PrevPt != op2NextPt &&
+                if (CheckDisposeAdjacent(ref op2, op1, or1)) continue;
+                if (op1PrevPt != op2NextPt &&
                     (DistanceSqr(op1PrevPt, op2NextPt) < 2.01))
                 {
                     outPtList.pt[outPtList.prev[op1]] = op2NextPt;
                     continue;
                 }
-                else if (op1NextPt != op2PrevPt &&
+                if (op1NextPt != op2PrevPt &&
                     (DistanceSqr(op1NextPt, op2PrevPt) < 2.01))
                 {
                     outPtList.pt[outPtList.prev[op2]] = op1NextPt;
                     continue;
-                }
-                else
+                }                
+                //OK, there doesn't seem to be a way to join after all
+                //so just tidy up the polygons
+                outrecList.pts[or1] = op1;
+                if (or2 != or1)
                 {
-                    //OK, there doesn't seem to be a way to join after all
-                    //so just tidy up the polygons
-                    outrecList.pts[or1] = op1;
-                    if (or2 != or1)
-                    {
-                        outrecList.pts[or2] = op2;
-                        CleanCollinear(or2);
-                    }
-                    break;
+                    outrecList.pts[or2] = op2;
+                    CleanCollinear(or2);
                 }
+                break;
             }
             //Debug.Log($"After Joint: Outrec {result} {PointCount(outrecList.pts[result])} {outrecList.owner[result]}");           
             return result;
@@ -3117,12 +3111,11 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             {
                 int newOr = outrecList.AddOutRec(-1, false, -1);
 
-                //if (_using_polytree)
-                //{
-                //    if (outrec.splits == null)
-                //        outrec.splits = new List<OutRec>();
-                //    outrec.splits.Add(newOr);
-                //}
+                if (_using_polytree)
+                {
+                    outrecList.AddSplit(outrec, newOr);
+                    //Debug.Log($"Adding Split to outrec {outrec}");
+                }
 
                 if (math.abs(area1) >= math.abs(area2))
                 {
@@ -3154,7 +3147,8 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             {
                 outrecList.pts[outrec] = op;
                 if (op != -1)
-                    outPtList.outrec[op] = outrec;                
+                    outPtList.outrec[op] = outrec;
+
                 //if (op != -1)
                 //{
                 //    //Debug.Log($"outrec old: {outPtList.outrec[op]} new: {outrec}");
@@ -3193,7 +3187,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             }
             var tmpOp = outrecList.pts[outrec];
             FixSelfIntersects(ref tmpOp);
-            outrecList.pts[outrec]=tmpOp;
+            outrecList.pts[outrec] = tmpOp;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -3269,14 +3263,12 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             }
         }
         internal bool BuildPath(int op, bool reverse, bool isOpen, ref Polygon path)
-
-        //internal bool BuildPath(int op, bool isOpen, ref Polygon path)
         {
             if (outPtList.next[op] == op || (!isOpen && outPtList.next[op] == outPtList.prev[op])) return false;
 
             path.AddComponent();
 
-            long2 lastPt, nextPt;
+            long2 lastPt;
             int op2;
             if (reverse)
             {
@@ -3288,50 +3280,30 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 op = outPtList.next[op];
                 lastPt = outPtList.pt[op];
                 op2 = outPtList.next[op];
-            } 
-             
-            path.nodes.Add(_invScale * lastPt);
-
-            if (reverse)
-            {
-                while (op2 != op)
-                {
-                    nextPt = outPtList.pt[op2];
-                    if (nextPt != lastPt)
-                    {
-                        lastPt = nextPt;
-                        path.nodes.Add(_invScale * lastPt);
-                    }
-                    op2 = outPtList.prev[op2];
-                }
-                if (!isOpen)
-                {
-                    lastPt = outPtList.pt[op2];
-                    if (lastPt != outPtList.pt[outPtList.next[op2]])
-                        path.nodes.Add(_invScale * lastPt);
-                }
             }
-            else
+            var firstPt = lastPt;
+            path.nodes.Add(_invScale * lastPt);
+            
+            while (op2 != op)
             {
-                while (op2 != op)
+                var op2Pt = outPtList.pt[op2];
+                if (op2Pt != lastPt)
                 {
-                    nextPt = outPtList.pt[op2];
-                    if (nextPt != lastPt)
-                    {
-                        lastPt = nextPt;
-                        path.nodes.Add(_invScale * lastPt);
-                    }
+                    lastPt = op2Pt;
+                    path.nodes.Add(_invScale * lastPt);
+                }
+                if(reverse)
+                    op2 = outPtList.prev[op2];
+                else
                     op2 = outPtList.next[op2];
-                }
-                if (!isOpen)
-                {
-                    lastPt = outPtList.pt[op2];
-                    if (lastPt != outPtList.pt[outPtList.prev[op2]])
-                        path.nodes.Add(_invScale * lastPt);
-                }
+            }
+            if (!isOpen)
+            {
+                if (firstPt != lastPt)
+                    path.nodes.Add(_invScale * firstPt);
             }
             return true;
-        }        
+        }
 
         bool BuildPaths(ref Polygon solutionClosed, ref Polygon solutionOpen)
         {
@@ -3360,24 +3332,27 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
 
             return true;
         }
-        //private bool Path1InsidePath2(int or1, int or2)
-        //{
-        //    PointInPolygonResult result;
-        //    int op = outrecList.pts[or1];
-        //    do
-        //    {
-        //        result = InternalClipperFunc.PointInPolygon(outPtList.pt[op], or2.path);
-        //        if (result != PointInPolygonResult.IsOn) break;
-        //        op = op.next!;
-        //    } while (op != or1.pts);
-        //    return result == PointInPolygonResult.IsInside;
-        //}
+        private bool Path1InsidePath2(int or1, int or2)
+        {
+            PointInPolygonResult result;
+            int op = outrecList.pts[or1];
+            int op2 = outrecList.pts[or2];
+            int startOp = op;
+            do
+            {
+                result = InternalClipperFunc.PointInPolygon(outPtList.pt[op], ref outPtList, op2);
+                if (result != PointInPolygonResult.IsOn) break;
+                op = outPtList.next[op];
+            } while (op != startOp);
+            return result == PointInPolygonResult.IsInside;
+        }        
 
         private Rect64 GetBounds(int or)
         {
-            Rect64 result = new Rect64(long.MaxValue, long.MaxValue, -long.MaxValue, -long.MaxValue);
-            int start = outrecList.pts[or], next;
-            next = start;
+            int op = outrecList.pts[or], next;            
+            if (InternalClipperFunc.PointCount(in outPtList, op) == 0) return new Rect64();
+            Rect64 result = ClipperFunc.MaxInvalidRect64();
+            next = op;
             do
             {
                 var nextPt = outPtList.pt[next];
@@ -3386,64 +3361,62 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                 if (nextPt.y < result.top) result.top = nextPt.y;
                 if (nextPt.y > result.bottom) result.bottom = nextPt.y;
                 next = outPtList.next[next];
-            } while (next != start);
+            } while (next != op);
             return result;
         }
-        //private Rect64 GetBounds(Path64 path)
-        //{
-        //    if (path.Count == 0) return new Rect64();
-        //    Rect64 result = new Rect64(long.MaxValue, long.MaxValue, -long.MaxValue, -long.MaxValue);
-        //    foreach (Point64 pt in path)
-        //    {
-        //        if (pt.X < result.left) result.left = pt.X;
-        //        if (pt.X > result.right) result.right = pt.X;
-        //        if (pt.Y < result.top) result.top = pt.Y;
-        //        if (pt.Y > result.bottom) result.bottom = pt.Y;
-        //    }
-        //    return result;
-        //}
 
-        //private bool DeepCheckOwner(int outrec, int owner)
-        //{
-        //    if (outrecList.bounds[owner].IsEmpty())
-        //        outrecList.bounds[owner] = GetBounds(owner);
-        //    bool isInsideOwnerBounds = outrecList.bounds[owner].Contains(outrecList.bounds[outrec]);
+        private bool DeepCheckOwner(int outrec, int owner)
+        {
+            if (outrecList.bounds[owner].IsEmpty())
+                outrecList.bounds[owner] = GetBounds(owner);
+            bool isInsideOwnerBounds = outrecList.bounds[owner].Contains(outrecList.bounds[outrec]);
 
-        //    // while looking for the correct owner, check the owner's
-        //    // splits **before** checking the owner itself because
-        //    // splits can occur internally, and checking the owner
-        //    // first would miss the inner split's true ownership
-        //    if (owner.splits != null)
-        //        foreach (OutRec asplit in owner.splits!)
-        //        {
-        //            OutRec? split = GetRealOutRec(asplit);
-        //            if (split == null || split.idx <= owner.idx || split == outrec) continue;
-        //            if (split.splits != null && DeepCheckOwner(outrec, split)) return true;
+            // while looking for the correct owner, check the owner's
+            // splits **before** checking the owner itself because
+            // splits can occur internally, and checking the owner
+            // first would miss the inner split's true ownership
+            var asplitID = outrecList.splitStartIDs[owner];
+            if (asplitID != -1)
+            {
+                do
+                {
+                    var asplit = outrecList.splits[asplitID];
+                    //Debug.Log($"Deepcheck split ownership for outrec {asplit}");
+                    int split = GetRealOutRec(asplit);
+                    if (split == -1 || split <= owner || split == outrec)
+                    {
+                        asplitID = outrecList.nextSplit[asplitID];
+                        continue;
+                    }
+                    if (outrecList.splitStartIDs[split] != -1 && DeepCheckOwner(outrec, split)) return true;
 
-        //            if (split.path.Count == 0)
-        //                BuildPath(split.pts!, ReverseSolution, false, split.path);
-        //            if (split.bounds.IsEmpty()) split.bounds = GetBounds(split.path);
+                    //if(InternalClipperFunc.PointCount(outPtList, outrecList.pts[split]) == 0)
+                    //if (split.path.Count == 0)
+                    //    BuildPath(split.pts!, ReverseSolution, false, split.path);
+                    if (outrecList.bounds[split].IsEmpty()) outrecList.bounds[split] = GetBounds(split);
 
-        //            if (split.bounds.Contains(outrec.bounds) && Path1InsidePath2(outrec, split))
-        //            {
-        //                outrec.owner = split;
-        //                return true;
-        //            }
-        //        }
+                    if (outrecList.bounds[split].Contains(outrecList.bounds[outrec]) && Path1InsidePath2(outrec, split))
+                    {
+                        outrecList.owner[outrec] = split;
+                        return true;
+                    }
+                    asplitID = outrecList.nextSplit[asplitID];
+                } while (asplitID != -1);
+            }
 
-        //    // only continue when not inside recursion
-        //    if (owner != outrecList.owner[outrec]) return false;
+            // only continue when not inside recursion
+            if (owner != outrecList.owner[outrec]) return false;
 
-        //    for (; ; )
-        //    {
-        //        if (isInsideOwnerBounds && Path1InsidePath2(outrec, outrec.owner!))
-        //            return true;
+            for (; ; )
+            {
+                if (isInsideOwnerBounds && Path1InsidePath2(outrec, outrecList.owner[outrec]))
+                    return true;
 
-        //        outrec.owner = outrec.owner!.owner;
-        //        if (outrec.owner == null) return false;
-        //        isInsideOwnerBounds = outrec.owner.bounds.Contains(outrec.bounds);
-        //    }
-        //}
+                outrecList.owner[outrec] = outrecList.owner[outrecList.owner[outrec]];
+                if (outrecList.owner[outrec] == -1) return false;
+                isInsideOwnerBounds = outrecList.bounds[outrecList.owner[outrec]].Contains(outrecList.bounds[outrec]);
+            }
+        }
 
         bool BuildTree(ref PolyTree polytree, ref Polygon solutionOpen)
         {
@@ -3465,78 +3438,60 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
                     BuildPath(outrecList.pts[outrec], ReverseSolution, true, ref solutionOpen);
                     continue;
                 }
+                if (!IsValidClosedPath(outrecList.pts[outrec]))
+                    continue;
+                if (outrecList.bounds[outrec].IsEmpty()) outrecList.bounds[outrec] = GetBounds(outrec);
 
-                //if (outrecList.bounds[outrec].IsEmpty()) outrecList.bounds[outrec] = GetBounds(outrec);
                 var owner = GetRealOutRec(outrecList.owner[outrec]);
                 outrecList.owner[outrec] = owner;
-                //if (outrec.owner != null)
-                //    DeepCheckOwner(outrec, outrec.owner);
+
+                if (outrecList.owner[outrec] != -1)
+                    DeepCheckOwner(outrec, outrecList.owner[outrec]);
+
+                // swap order when outer/owner paths are preceeded by their inner paths is not really needed with this implementation
+
+
+                //if (outrecList.owner[outrec] != -1)
+                //    Debug.Log($"Outrec {outrec} is owned by {outrecList.owner[outrec]} and has {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes");
+                //else
+                //    Debug.Log($"Outrec {outrec} is exterior and has {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes");
 
                 if (outrecList.owner[outrec] == -1) //if no owner, definitely an outer polygon
                 {
+                    //Debug.Log($"Outrec {outrec}: outer with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes");
                     var node = components[outrec];
-                    node.orientation = PolyOrientation.CCW;
                     components[outrec] = node;
                     exteriorIDs.Add(outrec);
                 }
                 else
-                {
-                    //if owner has no startID, or is not the first Outer Polygon,
-                    //then promote current path to Outer Polygon
-                    //maybe better approach: if (outrec_list.owner[i] == -1 || !OuterPolygonList.Contains(outrec_list.owner[i])) 
-                    if (outrecList.owner[outrec] == -1 || outrecList.owner[outrec] != 0)
-                    {
-                        var node = components[outrec];
-                        node.orientation = PolyOrientation.CCW;
-                        components[outrec] = node;
-                        exteriorIDs.Add(outrec);
-                    }
-                    else
-                    {
-                        var ownerNode = components[outrecList.owner[outrec]];
-                        PolyOrientation desiredOrientation;
-                        switch (ownerNode.orientation)
-                        {
-                            case PolyOrientation.CW: desiredOrientation = PolyOrientation.CCW; break;
-                            case PolyOrientation.CCW: desiredOrientation = PolyOrientation.CW; break;
-                            case PolyOrientation.None: desiredOrientation = PolyOrientation.None; Debug.Log($"Should not happen"); break;
-                            default: desiredOrientation = PolyOrientation.None; break;
-                        }
-                        var node = components[outrec];
-                        node.orientation = desiredOrientation;
-                        polytree.AddChildComponent(outrecList.owner[outrec], node);
-                    }
+                {                   
+                    var node = components[outrec];
+                    polytree.AddChildComponent(outrecList.owner[outrec], node);
+                    //Debug.Log($"Outrec {outrec}: child of {outrecList.owner[outrec]} {node.orientation} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes.");
                 }
             }
             return true;
         }
+
         public void GetPolygonWithHoles(in PolyTree polyTree, int outrec, ref Polygon outPolygon)
         {
-            if (polyTree.components[outrec].orientation == PolyOrientation.CCW)
+            //Debug.Log($"taking Exterior {outrec} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes as is ");
+            BuildPath(outrecList.pts[outrec], false, false, ref outPolygon);
+
+            int hole;
+            int next = outrec;
+            while (polyTree.GetNextComponent(next, out hole))
             {
-                //Debug.Log("taking Exterior as is");
-                BuildPath(outrecList.pts[outrec], false, false, ref outPolygon);
-            }
-            else
-            {
-                //Debug.Log("reversing Exterior");
-                BuildPath(outrecList.pts[outrec], true, false, ref outPolygon);
-            }
-            TreeNode holeNode;
-            int holeID;
-            while (polyTree.GetNextComponent(outrec, out holeNode, out holeID))
-            {
-                if (holeNode.orientation == PolyOrientation.CW)
+                if (outrecList.owner[hole] != outrec)
                 {
-                    //Debug.Log("taking Hole as is");
-                    BuildPath(outrecList.pts[outrec], false, false, ref outPolygon);
+                    next = hole;
+                    //Debug.Log($"Hole {hole} is an island, tesselate those islands separately!"); //TO-DO: implement (e.g. returning a list with island ID's)
+                    continue;
                 }
-                else
-                {
-                    //Debug.Log("reversing Hole");
-                    BuildPath(outrecList.pts[outrec], true, false, ref outPolygon);
-                }
-                outrec = holeID;
+                //Debug.Log($"taking Hole {holeID} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[holeID])} nodes as is");
+                BuildPath(outrecList.pts[hole], false, false, ref outPolygon);
+
+                next = hole;
             }
             outPolygon.ClosePolygon(); //abuse StartID to store end of last Component
         }
@@ -3573,7 +3528,7 @@ namespace PolygonMath.Clipping.Clipper2LibBURST
             }
             //catch
             //{
-            //    success = false;
+            //    _succeeded = false;
             //}
 
             ClearSolution();
