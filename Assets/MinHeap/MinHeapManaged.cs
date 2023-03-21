@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.Collections;
 
-namespace Chart3D.Helper.MinHeap
+namespace Chart3D.MinHeap
 {
     public struct MinHeapManaged<T> : IEnumerable
     {

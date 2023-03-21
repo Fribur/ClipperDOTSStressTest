@@ -1,15 +1,20 @@
 using System;
 using System.Collections.Generic;
 using Unity.Collections;
+using Unity.Jobs;
 
-namespace Chart3D.Helper.MinHeap
+namespace Chart3D.MinHeap
 {
-    public struct MinHeap<T, COMPARER> : IDisposable where T : unmanaged where COMPARER : unmanaged, IComparer<T>
+    public enum Comparison
+    {
+        Min,
+        Max
+    };
+    public struct MinHeap<T> : IDisposable where T : unmanaged, IComparable<T>
     {
         public NativeList<T> _stack;
-
-        COMPARER _comparer;
-        public int Length { get { return _stack.Length; } }
+        int m_CompareMultiplier;
+        public int Count { get { return _stack.Length; } }
         public bool IsCreated { get { return _stack.IsCreated; } }
         public bool IsEmpty { get { return _stack.Length == 0; } }
 
@@ -17,10 +22,10 @@ namespace Chart3D.Helper.MinHeap
         {
             _stack.Clear();
         }
-        public MinHeap(int size, Allocator _allocator, COMPARER comparer)
+        public MinHeap(int size, Allocator _allocator, Comparison comparison = Comparison.Min)
         {
             _stack = new NativeList<T>(size, _allocator);//needed size depends on precision
-            _comparer = comparer;
+            m_CompareMultiplier = (comparison == Comparison.Min) ? 1 : -1;
         }
         public void Push(T value)
         {
@@ -51,7 +56,7 @@ namespace Chart3D.Helper.MinHeap
             while (childIndex > 0)
             {
                 int parentIndex = (childIndex - 1) / 2;
-                if (_comparer.Compare(_stack[childIndex], _stack[parentIndex]) < 0)
+                if(_stack[childIndex].CompareTo(_stack[parentIndex]) * m_CompareMultiplier < 0)
                 {
                     Swap(parentIndex, childIndex);
                     childIndex = parentIndex;
@@ -79,9 +84,9 @@ namespace Chart3D.Helper.MinHeap
                 int rightChildIndex = index * 2 + 2;
                 int smallestItemIndex = index; // The index of the parent
 
-                if (leftChildIndex < _stack.Length && _comparer.Compare(_stack[leftChildIndex], _stack[smallestItemIndex]) < 0)
+                if (leftChildIndex < _stack.Length && _stack[leftChildIndex].CompareTo(_stack[smallestItemIndex]) * m_CompareMultiplier < 0)
                     smallestItemIndex = leftChildIndex;
-                if (rightChildIndex < _stack.Length && _comparer.Compare(_stack[rightChildIndex], _stack[smallestItemIndex]) < 0)
+                if (rightChildIndex < _stack.Length && _stack[rightChildIndex].CompareTo(_stack[smallestItemIndex]) * m_CompareMultiplier < 0)
                     smallestItemIndex = rightChildIndex;
 
                 if (smallestItemIndex != index)
@@ -102,6 +107,10 @@ namespace Chart3D.Helper.MinHeap
         public void Dispose()
         {
             _stack.Dispose();
+        }
+        public void Dispose(JobHandle jobHandle)
+        {
+            _stack.Dispose(jobHandle);
         }
     }
 }

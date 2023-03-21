@@ -9,7 +9,8 @@
         "StressTest",
         "Unity.Collections",
         "Unity.Transforms",
-        "ECSTestsFixture"
+        "ECSTestsFixture",
+        "Unity.Mathematics"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

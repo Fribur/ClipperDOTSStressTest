@@ -1,5 +1,5 @@
-//using Chart3D.Components;
-//using Chart3D.Components.IComparer;
+//using Chart3D.LayerSpawner.Components;
+//using Chart3D.LayerSpawner.Components.IComparer;
 //using Chart3D.Helper;
 //using Chart3D.S57Helper;
 //using S57;
