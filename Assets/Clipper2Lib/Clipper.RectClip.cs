@@ -1,6 +1,6 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
-* Date      :  16 February 2023                                                *
+* Date      :  30 May 2023                                                     *
 * Website   :  http://www.angusj.com                                           *
 * Copyright :  Angus Johnson 2010-2023                                         *
 * Purpose   :  FAST rectangular clipping                                       *
@@ -10,7 +10,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace Clipper2Lib
@@ -29,7 +28,7 @@ namespace Clipper2Lib
     }
   }
 
-  public class RectClip
+  public class RectClip64
   {
     protected enum Location
     {
@@ -43,7 +42,7 @@ namespace Clipper2Lib
     protected List<OutPt2?> results_;
     protected List<OutPt2?>[] edges_;
     protected int currIdx_ = -1;
-    internal RectClip(Rect64 rect)
+    internal RectClip64(Rect64 rect)
     {
       currIdx_ = -1;
       rect_ = rect;
@@ -611,7 +610,7 @@ namespace Clipper2Lib
       }
     }
 
-    public Paths64 Execute(Paths64 paths, bool convexOnly)
+    public Paths64 Execute(Paths64 paths)
     {
       Paths64 result = new Paths64();
       if (rect_.IsEmpty()) return result;
@@ -628,12 +627,9 @@ namespace Clipper2Lib
           continue;
         }
         ExecuteInternal(path);
-        if (!convexOnly)
-        {
-          CheckEdges();
-          for (int i = 0; i < 4; ++i)
-            TidyEdgePair(i, edges_[i * 2], edges_[i * 2 + 1]);
-        }
+        CheckEdges();
+        for (int i = 0; i < 4; ++i)
+          TidyEdgePair(i, edges_[i * 2], edges_[i * 2 + 1]);
 
         foreach (OutPt2? op in results_)
         {
@@ -721,7 +717,7 @@ namespace Clipper2Lib
         p1 = cw[i];
         if (p1 == null || p1.next == p1.prev)
         {
-          cw[i++]!.edge = null;
+          cw[i++] = null;
           j = 0;
           continue;
         }
@@ -916,11 +912,11 @@ namespace Clipper2Lib
 
   } // RectClip class
 
-  public class RectClipLines : RectClip
+  public class RectClipLines64 : RectClip64
   {
-    internal RectClipLines(Rect64 rect) : base(rect) { }
+    internal RectClipLines64(Rect64 rect) : base(rect) { }
 
-    public Paths64 Execute(Paths64 paths)
+    public new Paths64 Execute(Paths64 paths)
     {
       Paths64 result = new Paths64();
       if (rect_.IsEmpty()) return result;
@@ -1005,7 +1001,7 @@ namespace Clipper2Lib
 
         if (loc == Location.inside) // path must be entering rect
         {
-          Add(ip);
+          Add(ip, true);
         }
         else if (prev != Location.inside)
         {

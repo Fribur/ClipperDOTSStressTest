@@ -1,6 +1,6 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
-* Date      :  21 February 2023                                                *
+* Date      :  17 July 2023                                                    *
 * Website   :  http://www.angusj.com                                           *
 * Copyright :  Angus Johnson 2010-2023                                         *
 * Purpose   :  Core structures and functions for the Clipper Library           *
@@ -11,8 +11,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-using System.Threading;
 
 namespace Clipper2Lib
 {
@@ -213,9 +211,9 @@ namespace Clipper2Lib
       this.z = z;
     }
 
-    public override string ToString()
+    public string ToString(int precision = 2)
     {
-      return $"{x:F},{y:F},{z} ";
+      return string.Format($"{{0:F{precision}}},{{1:F{precision}}},{{2:D}}", x,y,z);
     }
 
 #else
@@ -255,9 +253,9 @@ namespace Clipper2Lib
       this.y = y;
     }
 
-    public override string ToString()
+    public string ToString(int precision = 2)
     {
-      return $"{x:F},{y:F} ";
+      return string.Format($"{{0:F{precision}}},{{1:F{precision}}}", x,y);
     }
 
 #endif
@@ -291,12 +289,9 @@ namespace Clipper2Lib
     public long top;
     public long right;
     public long bottom;
-    private static readonly string InvalidRect = "Invalid Rect64 assignment";
 
     public Rect64(long l, long t, long r, long b)
     {
-      if (r < l || b < t)
-        throw new Exception(InvalidRect);
       left = l;
       top = t;
       right = r;
@@ -384,12 +379,9 @@ namespace Clipper2Lib
     public double top;
     public double right;
     public double bottom;
-    private static readonly string InvalidRect = "Invalid RectD assignment";
 
     public RectD(double l, double t, double r, double b)
     {
-      if (r < l || b < t)
-        throw new Exception(InvalidRect);
       left = l;
       top = t;
       right = r;
@@ -503,11 +495,11 @@ namespace Clipper2Lib
     private PathD() : base() { }
     public PathD(int capacity = 0) : base(capacity) { }
     public PathD(IEnumerable<PointD> path) : base(path) { }
-    public override string ToString()
+    public string ToString(int precision = 2)
     {
       string s = "";
       foreach (PointD p in this)
-        s = s + p.ToString() + " ";
+        s = s + p.ToString(precision) + " ";
       return s;
     }
   }
@@ -517,11 +509,11 @@ namespace Clipper2Lib
     private PathsD() : base() { }
     public PathsD(int capacity = 0) : base(capacity) { }
     public PathsD(IEnumerable<PathD> paths) : base(paths) { }
-    public override string ToString()
+    public string ToString(int precision = 2)
     {
       string s = "";
       foreach (PathD p in this)
-        s = s + p.ToString() + "\n";
+        s = s + p.ToString(precision) + "\n";
       return s;
     }
   }
@@ -639,41 +631,41 @@ namespace Clipper2Lib
       double dx1 = (ln1b.X - ln1a.X);
       double dy2 = (ln2b.Y - ln2a.Y);
       double dx2 = (ln2b.X - ln2a.X);
-      double cp = dy1 * dx2 - dy2 * dx1;
-      if (cp == 0.0)
+      double det = dy1 * dx2 - dy2 * dx1;
+      if (det == 0.0)
       {
         ip = new Point64();
         return false;
       }
-      double qx = dx1 * ln1a.Y - dy1 * ln1a.X;
-      double qy = dx2 * ln2a.Y - dy2 * ln2a.X;
-      ip = new Point64(
-        CheckCastInt64((dx1 * qy - dx2 * qx) / cp),
-        CheckCastInt64((dy1 * qy - dy2 * qx) / cp));
-      return (ip.X != Invalid64 && ip.Y != Invalid64);
+
+      double t = ((ln1a.X - ln2a.X) * dy2 - (ln1a.Y - ln2a.Y) * dx2) / det;
+      if (t <= 0.0) ip = ln1a;
+      else if (t >= 1.0) ip = ln1b;
+      else ip = new Point64(ln1a.X + t * dx1, ln1a.Y + t * dy1);
+      return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool GetIntersectPoint(Point64 ln1a,
-      Point64 ln1b, Point64 ln2a, Point64 ln2b, out PointD ip)
+      Point64 ln1b, Point64 ln2a, Point64 ln2b, out Point64 ip)
     {
       double dy1 = (ln1b.Y - ln1a.Y);
       double dx1 = (ln1b.X - ln1a.X);
       double dy2 = (ln2b.Y - ln2a.Y);
       double dx2 = (ln2b.X - ln2a.X);
-      double q1 = dy1 * ln1a.X - dx1 * ln1a.Y;
-      double q2 = dy2 * ln2a.X - dx2 * ln2a.Y;
-      double cross_prod = dy1 * dx2 - dy2 * dx1;
-      if (cross_prod == 0.0)
+      double det = dy1 * dx2 - dy2 * dx1;
+      if (det == 0.0)
       {
-        ip = new PointD();
+        ip = new Point64();
         return false;
       }
-      ip = new PointD(
-        (dx2 * q1 - dx1 * q2) / cross_prod,
-        (dy2 * q1 - dy1 * q2) / cross_prod);
+      double t = ((ln1a.X - ln2a.X) * dy2 - (ln1a.Y - ln2a.Y) * dx2) / det;
+      if (t <= 0.0) ip = ln1a;        // ?? check further (see also #568)
+      else if (t >= 1.0) ip = ln2a;   // ?? check further
+      else ip = new Point64 (ln1a.X + t * dx1, ln1a.Y + t * dy1);
       return true;
     }
+
     internal static bool SegsIntersect(Point64 seg1a, 
       Point64 seg1b, Point64 seg2a, Point64 seg2b, bool inclusive = false)
     {

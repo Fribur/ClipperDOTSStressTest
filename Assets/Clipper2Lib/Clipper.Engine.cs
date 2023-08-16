@@ -1,6 +1,6 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
-* Date      :  3 March 2023                                                    *
+* Date      :  19 July 2023                                                    *
 * Website   :  http://www.angusj.com                                           *
 * Copyright :  Angus Johnson 2010-2023                                         *
 * Purpose   :  This is the main polygon clipping module                        *
@@ -87,7 +87,6 @@ namespace Clipper2Lib
     {
       return vertex.GetHashCode();
     }
-
   };
 
   // IntersectNode: a structure representing 2 intersecting edges.
@@ -227,6 +226,134 @@ namespace Clipper2Lib
     internal bool isLeftBound;
     internal JoinWith joinWith;
   };
+
+  internal static class ClipperEngine
+  {
+    internal static void AddLocMin(Vertex vert, PathType polytype, bool isOpen,
+      List<LocalMinima> minimaList)
+    {
+      // make sure the vertex is added only once ...
+      if ((vert.flags & VertexFlags.LocalMin) != VertexFlags.None) return;
+      vert.flags |= VertexFlags.LocalMin;
+
+      LocalMinima lm = new LocalMinima(vert, polytype, isOpen);
+      minimaList.Add(lm);
+    }
+
+    internal static void AddPathsToVertexList(Paths64 paths, PathType polytype, bool isOpen,
+      List<LocalMinima> minimaList, List<Vertex> vertexList)
+    {
+      int totalVertCnt = 0;
+      foreach (Path64 path in paths) totalVertCnt += path.Count;
+      vertexList.Capacity = vertexList.Count + totalVertCnt;
+
+      foreach (Path64 path in paths)
+      {
+        Vertex? v0 = null, prev_v = null, curr_v;
+        foreach (Point64 pt in path)
+        {
+          if (v0 == null)
+          {
+            v0 = new Vertex(pt, VertexFlags.None, null);
+            vertexList.Add(v0);
+            prev_v = v0;
+          }
+          else if (prev_v!.pt != pt) // ie skips duplicates
+          {
+            curr_v = new Vertex(pt, VertexFlags.None, prev_v);
+            vertexList.Add(curr_v);
+            prev_v.next = curr_v;
+            prev_v = curr_v;
+          }
+        }
+        if (prev_v == null || prev_v.prev == null) continue;
+        if (!isOpen && prev_v.pt == v0!.pt) prev_v = prev_v.prev;
+        prev_v.next = v0;
+        v0!.prev = prev_v;
+        if (!isOpen && prev_v.next == prev_v) continue;
+
+        // OK, we have a valid path
+        bool going_up, going_up0;
+        if (isOpen)
+        {
+          curr_v = v0.next;
+          while (curr_v != v0 && curr_v!.pt.Y == v0.pt.Y)
+            curr_v = curr_v.next;
+          going_up = curr_v.pt.Y <= v0.pt.Y;
+          if (going_up)
+          {
+            v0.flags = VertexFlags.OpenStart;
+            AddLocMin(v0, polytype, true, minimaList);
+          }
+          else
+            v0.flags = VertexFlags.OpenStart | VertexFlags.LocalMax;
+        }
+        else // closed path
+        {
+          prev_v = v0.prev;
+          while (prev_v != v0 && prev_v!.pt.Y == v0.pt.Y)
+            prev_v = prev_v.prev;
+          if (prev_v == v0)
+            continue; // only open paths can be completely flat
+          going_up = prev_v.pt.Y > v0.pt.Y;
+        }
+
+        going_up0 = going_up;
+        prev_v = v0;
+        curr_v = v0.next;
+        while (curr_v != v0)
+        {
+          if (curr_v!.pt.Y > prev_v.pt.Y && going_up)
+          {
+            prev_v.flags |= VertexFlags.LocalMax;
+            going_up = false;
+          }
+          else if (curr_v.pt.Y < prev_v.pt.Y && !going_up)
+          {
+            going_up = true;
+            AddLocMin(prev_v, polytype, isOpen, minimaList);
+          }
+          prev_v = curr_v;
+          curr_v = curr_v.next;
+        }
+
+        if (isOpen)
+        {
+          prev_v.flags |= VertexFlags.OpenEnd;
+          if (going_up)
+            prev_v.flags |= VertexFlags.LocalMax;
+          else
+            AddLocMin(prev_v, polytype, isOpen, minimaList);
+        }
+        else if (going_up != going_up0)
+        {
+          if (going_up0) AddLocMin(prev_v, polytype, false, minimaList);
+          else prev_v.flags |= VertexFlags.LocalMax;
+        }
+      }
+    }
+  }
+
+  public class ReuseableDataContainer64
+  {
+    internal readonly List<LocalMinima> _minimaList;
+    internal readonly List<Vertex> _vertexList;
+    public ReuseableDataContainer64()
+    {
+      _minimaList = new List<LocalMinima>();
+      _vertexList = new List<Vertex>();
+    }
+    public void Clear()
+    {
+      _minimaList.Clear();
+      _vertexList.Clear();
+    }
+
+    public void AddPaths(Paths64 paths, PathType pt, bool isOpen)
+    {
+      ClipperEngine.AddPathsToVertexList(paths, pt, isOpen, _minimaList, _vertexList);
+    }
+  }
 
   public class ClipperBase
   {
@@ -720,99 +847,7 @@ namespace Clipper2Lib
       LocalMinima lm = new LocalMinima(vert, polytype, isOpen);
       _minimaList.Add(lm);
     }
-
-    protected void AddPathsToVertexList(Paths64 paths, PathType polytype, bool isOpen)
-    {
-      int totalVertCnt = 0;
-      foreach (Path64 path in paths) totalVertCnt += path.Count;
-      _vertexList.Capacity = _vertexList.Count + totalVertCnt;
-
-      foreach (Path64 path in paths)
-      {
-        Vertex? v0 = null, prev_v = null, curr_v;
-        foreach (Point64 pt in path)
-        {
-          if (v0 == null)
-          {
-            v0 = new Vertex(pt, VertexFlags.None, null);
-            _vertexList.Add(v0);
-            prev_v = v0;
-          }
-          else if (prev_v!.pt != pt) // ie skips duplicates
-          {
-            curr_v = new Vertex(pt, VertexFlags.None, prev_v);
-            _vertexList.Add(curr_v);
-            prev_v.next = curr_v;
-            prev_v = curr_v;
-          }
-        }
-        if (prev_v == null || prev_v.prev == null) continue;
-        if (!isOpen && prev_v.pt == v0!.pt) prev_v = prev_v.prev;
-        prev_v.next = v0;
-        v0!.prev = prev_v;
-        if (!isOpen && prev_v.next == prev_v) continue;
-
-        // OK, we have a valid path
-        bool going_up, going_up0;
-        if (isOpen)
-        {
-          curr_v = v0.next;
-          while (curr_v != v0 && curr_v!.pt.Y == v0.pt.Y)
-            curr_v = curr_v.next;
-          going_up = curr_v.pt.Y <= v0.pt.Y;
-          if (going_up)
-          {
-            v0.flags = VertexFlags.OpenStart;
-            AddLocMin(v0, polytype, true);
-          }
-          else
-            v0.flags = VertexFlags.OpenStart | VertexFlags.LocalMax;
-        }
-        else // closed path
-        {
-          prev_v = v0.prev;
-          while (prev_v != v0 && prev_v!.pt.Y == v0.pt.Y)
-            prev_v = prev_v.prev;
-          if (prev_v == v0)
-            continue; // only open paths can be completely flat
-          going_up = prev_v.pt.Y > v0.pt.Y;
-        }
-
-        going_up0 = going_up;
-        prev_v = v0;
-        curr_v = v0.next;
-        while (curr_v != v0)
-        {
-          if (curr_v!.pt.Y > prev_v.pt.Y && going_up)
-          {
-            prev_v.flags |= VertexFlags.LocalMax;
-            going_up = false;
-          }
-          else if (curr_v.pt.Y < prev_v.pt.Y && !going_up)
-          {
-            going_up = true;
-            AddLocMin(prev_v, polytype, isOpen);
-          }
-          prev_v = curr_v;
-          curr_v = curr_v.next;
-        }
-
-        if (isOpen)
-        {
-          prev_v.flags |= VertexFlags.OpenEnd;
-          if (going_up)
-            prev_v.flags |= VertexFlags.LocalMax;
-          else
-            AddLocMin(prev_v, polytype, isOpen);
-        }
-        else if (going_up != going_up0)
-        {
-          if (going_up0) AddLocMin(prev_v, polytype, false);
-          else prev_v.flags |= VertexFlags.LocalMax;
-        }
-      }
-    }
-
+   
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void AddSubject(Path64 path)
     {
@@ -843,7 +878,22 @@ namespace Clipper2Lib
     {
       if (isOpen) _hasOpenPaths = true;
       _isSortedMinimaList = false;
-      AddPathsToVertexList(paths, polytype, isOpen);
+      ClipperEngine.AddPathsToVertexList(paths, polytype, isOpen, _minimaList, _vertexList);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected void AddReuseableData(ReuseableDataContainer64 reuseableData)
+    {
+      if (reuseableData._minimaList.Count == 0) return;
+      // nb: reuseableData will continue to own the vertices, so it's important
+      // that the reuseableData object isn't destroyed before the Clipper object
+      // that's using the data.
+      _isSortedMinimaList = false;
+      foreach (LocalMinima lm in reuseableData._minimaList)
+      {
+        _minimaList.Add(new LocalMinima(lm.vertex, lm.polytype, lm.isOpen));
+        if (lm.isOpen) _hasOpenPaths = true;
+      }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1480,7 +1530,7 @@ namespace Clipper2Lib
       InsertScanline(ae.top.Y);
 
       CheckJoinLeft(ae, ae.bot);
-      CheckJoinRight(ae, ae.bot);
+      CheckJoinRight(ae, ae.bot, true); // (#500)
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2219,6 +2269,7 @@ private void DoHorizontal(Active horz)
         //still more horizontals in bound to process ...
         if (IsHotEdge(horz))
           AddOutPt(horz, horz.top);
+
         UpdateEdgeIntoAEL(horz);
 
         if (PreserveCollinear && !horzIsOpen && HorzIsSpike(horz))
@@ -2229,7 +2280,12 @@ private void DoHorizontal(Active horz)
 
       } // end for loop and end of (possible consecutive) horizontals
 
-      if (IsHotEdge(horz)) AddOutPt(horz, horz.top);
+      if (IsHotEdge(horz)) 
+      {
+        OutPt op = AddOutPt(horz, horz.top);
+        AddToHorzSegList(op);
+      }
+
       UpdateEdgeIntoAEL(horz); // this is the end of an intermediate horiz.
     }
 
@@ -2351,9 +2407,10 @@ private void DoHorizontal(Active horz)
     {
       Active? prev = e.prevInAEL;
       if (prev == null || IsOpen(e) || IsOpen(prev) ||
-        !IsHotEdge(e) || !IsHotEdge(prev) ||
-        pt.Y < e.top.Y + 2 || pt.Y < prev.top.Y + 2) return;
- 
+        !IsHotEdge(e) || !IsHotEdge(prev)) return;
+      if ((pt.Y < e.top.Y + 2 || pt.Y < prev.top.Y + 2) &&  // avoid trivial joins
+        ((e.bot.Y > pt.Y) || (prev.bot.Y > pt.Y))) return;  // (#490)
+
       if (checkCurrX)
       {
         if (Clipper.PerpendicDistFromLineSqrd(pt, prev.bot, prev.top) > 0.25) return;
@@ -2377,9 +2434,9 @@ private void DoHorizontal(Active horz)
     {
       Active? next = e.nextInAEL;
       if (IsOpen(e) || !IsHotEdge(e) || IsJoined(e) ||
-        next == null || IsOpen(next) || !IsHotEdge(next) ||
-        pt.Y < e.top.Y + 2 || pt.Y < next.top.Y + 2) // avoids trivial joins
-          return;
+        next == null || IsOpen(next) || !IsHotEdge(next)) return; 
+      if ((pt.Y < e.top.Y + 2 || pt.Y < next.top.Y + 2) &&  // avoid trivial joins
+        ((e.bot.Y > pt.Y) || (next.bot.Y > pt.Y)))  return; // (#490)
 
       if (checkCurrX)
       {
@@ -2499,8 +2556,8 @@ private void DoHorizontal(Active horz)
         for (int j = i + 1; j < k; j++)
         {
           HorzSegment hs2 = _horzSegList[j];
-          if (hs2.leftOp!.pt.X >= hs1.rightOp!.pt.X) break;
-          if (hs2.leftToRight == hs1.leftToRight ||
+          if ((hs2.leftOp!.pt.X >= hs1.rightOp!.pt.X) || 
+            (hs2.leftToRight == hs1.leftToRight) ||
             (hs2.rightOp!.pt.X <= hs1.leftOp!.pt.X)) continue;
           long curr_y = hs1.leftOp.pt.Y;
           if ((hs1).leftToRight)
@@ -2648,12 +2705,11 @@ private void DoHorizontal(Active horz)
         op1b.prev = op2b;
         op2b.next = op1b;
 
-        if (or1 == or2)
+        if (or1 == or2) // 'join' is really a split
         {
-          or2 = new OutRec
-          {
-            pts = op1b
-          };
+          or2 = NewOutRec();
+          or2.pts = op1b;
+
           FixOutRecPts(or2);
           if (or1.pts!.outrec == or2)
           {
@@ -2661,19 +2717,22 @@ private void DoHorizontal(Active horz)
             or1.pts.outrec = or1;
           }
 
-          if (_using_polytree)
+          if (_using_polytree)  //#498, #520, #584, D#576
           {
-            if (Path1InsidePath2(or2.pts, or1.pts))
-              SetOwner(or2, or1);
-            else if (Path1InsidePath2(or1.pts, or2.pts))
+            if (Path1InsidePath2(or1.pts, or2.pts))
+            {
+              or2.owner = or1.owner;
               SetOwner(or1, or2);
+            }
             else
-              or2.owner = or1;
+            {
+              SetOwner(or2, or1);
+              or1.splits ??= new List<int>();
+              or1.splits.Add(or2.idx); 
+            }
           }
           else
             or2.owner = or1;
-
-          _outrecList.Add(or2);
         }
         else
         {
@@ -2770,8 +2829,7 @@ private void DoHorizontal(Active horz)
       OutPt result = prevOp;
 
       InternalClipper.GetIntersectPoint(
-          prevOp.pt, splitOp.pt, splitOp.next.pt, nextNextOp.pt, out PointD tmp);
-      Point64 ip = new Point64(tmp);
+          prevOp.pt, splitOp.pt, splitOp.next.pt, nextNextOp.pt, out Point64 ip);
 
 #if USINGZ
       if (_zCallback != null)
@@ -2787,11 +2845,6 @@ private void DoHorizontal(Active horz)
         return;
       }
 
-      // nb: area1 is the path's area *before* splitting, whereas area2 is
-      // the area of the triangle containing splitOp & splitOp.next.
-      // So the only way for these areas to have the same sign is if
-      // the split triangle is larger than the path containing prevOp or
-      // if there's more than one self=intersection.
       double area2 = AreaTriangle(ip, splitOp.pt, splitOp.next.pt);
       double absArea2 = Math.Abs(area2);
 
@@ -2804,13 +2857,16 @@ private void DoHorizontal(Active horz)
       }
       else
       {
-        OutPt newOp2 = new 
-          OutPt(ip, outrec) { prev = prevOp, next = nextNextOp };
-        
+        OutPt newOp2 = new OutPt(ip, outrec) { prev = prevOp, next = nextNextOp };        
         nextNextOp.prev = newOp2;
         prevOp.next = newOp2;
       }
 
+      // nb: area1 is the path's area *before* splitting, whereas area2 is
+      // the area of the triangle containing splitOp & splitOp.next.
+      // So the only way for these areas to have the same sign is if
+      // the split triangle is larger than the path containing prevOp or
+      // if there's more than one self=intersection.
       if (absArea2 > 1 &&
           (absArea2 > absArea1 ||
            ((area2 > 0) == (area1 > 0))))
@@ -2820,16 +2876,24 @@ private void DoHorizontal(Active horz)
         splitOp.outrec = newOutRec;
         splitOp.next.outrec = newOutRec;
 
-        if (_using_polytree)
-        {
-          outrec.splits ??= new List<int>();
-          outrec.splits.Add(newOutRec.idx);
-        }
-
         OutPt newOp = new OutPt(ip, newOutRec) { prev = splitOp.next, next = splitOp };
         newOutRec.pts = newOp;
         splitOp.prev = newOp;
         splitOp.next.next = newOp;
+
+        if (_using_polytree)
+        {
+          if (Path1InsidePath2(prevOp, newOp))
+          {
+            newOutRec.splits ??= new List<int>();
+            newOutRec.splits.Add(outrec.idx);
+          }
+          else
+          {
+            outrec.splits ??= new List<int>();
+            outrec.splits.Add(newOutRec.idx);
+          }
+        }
       }
       //else { splitOp = null; splitOp.next = null; }
     }
@@ -2954,6 +3018,22 @@ private void DoHorizontal(Active horz)
       return true;
     }
 
+    private bool CheckSplitOwner(OutRec outrec, List<int>? splits)
+    {
+      foreach (int i in splits!)
+      {
+        OutRec? split = GetRealOutRec(_outrecList[i]);
+        if (split == null || split == outrec || split == outrec.owner) continue;
+        if (split!.splits != null && CheckSplitOwner(outrec, split.splits)) return true;
+        if (CheckBounds(split) && split.bounds.Contains(outrec.bounds) &&
+            Path1InsidePath2(outrec.pts!, split.pts!))
+        {
+          outrec.owner = split; //found in split
+          return true;
+        }
+      }
+      return false;
+    }
     private void RecursiveCheckOwners(OutRec outrec, PolyPathBase polypath)
     {
       // pre-condition: outrec will have valid bounds
@@ -2961,49 +3041,23 @@ private void DoHorizontal(Active horz)
 
       if (outrec.polypath != null || outrec.bounds.IsEmpty()) return;
 
-      while (outrec.owner != null &&
-        (outrec.owner.pts == null || !CheckBounds(outrec.owner)))
-          outrec.owner = outrec.owner.owner;
-
-      if (outrec.owner != null && outrec.owner.polypath == null)
-        RecursiveCheckOwners(outrec.owner, polypath);
-
       while (outrec.owner != null)
-        if (outrec.owner.bounds.Contains(outrec.bounds) &&
-          Path1InsidePath2(outrec.pts!, outrec.owner.pts!))
-          break; // found - owner contain outrec!
-        else
-          outrec.owner = outrec.owner.owner;
+      {
+        if (outrec.owner.splits != null && 
+          CheckSplitOwner(outrec, outrec.owner.splits)) break; 
+        else if (outrec.owner.pts != null && CheckBounds(outrec.owner) &&
+          Path1InsidePath2(outrec.pts!, outrec.owner.pts!)) break;
+        outrec.owner = outrec.owner.owner;
+      }
 
       if (outrec.owner != null)
-        outrec.polypath = outrec.owner.polypath!.AddChild(outrec.path);
+      {
+        if (outrec.owner.polypath == null)
+          RecursiveCheckOwners(outrec.owner, polypath);
+        outrec.polypath = outrec.owner.polypath!.AddChild(outrec.path); 
+      }
       else
         outrec.polypath = polypath.AddChild(outrec.path);
-    }
-
-    private void DeepCheckOwners(OutRec outrec, PolyPathBase polypath)
-    {
-      RecursiveCheckOwners(outrec, polypath);
-
-      while (outrec.owner != null && outrec.owner.splits != null)
-      {
-        OutRec? split = null;
-        foreach (int i in outrec.owner.splits)
-        {
-          split = GetRealOutRec(_outrecList[i]);
-          if (split != null && split != outrec &&
-            split != outrec.owner && CheckBounds(split) &&
-            split.bounds.Contains(outrec.bounds) &&
-              Path1InsidePath2(outrec.pts!, split.pts!))
-          {
-            RecursiveCheckOwners(split, polypath);
-            outrec.owner = split; //found in split
-            break; // inner 'for' loop
-          }
-          else split = null;
-        }
-        if (split == null) break;
-      }
     }
 
     protected void BuildTree(PolyPathBase polytree, Paths64 solutionOpen)
@@ -3030,7 +3084,7 @@ private void DoHorizontal(Active horz)
           continue;
         }
         if (CheckBounds(outrec))
-          DeepCheckOwners(outrec, polytree);
+          RecursiveCheckOwners(outrec, polytree);
       }
     }
 
@@ -3063,6 +3117,12 @@ private void DoHorizontal(Active horz)
     internal new void AddPath(Path64 path, PathType polytype, bool isOpen = false)
     {
       base.AddPath(path, polytype, isOpen);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public new void AddReuseableData(ReuseableDataContainer64 reuseableData)
+    {
+      base.AddReuseableData(reuseableData);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -3186,7 +3246,7 @@ private void DoHorizontal(Active horz)
       // temporarily convert integers to their initial float values
       // this will slow clipping marginally but will make it much easier
       // to understand the coordinates passed to the callback function
-      PointD tmp = new PointD(intersectPt);
+      PointD tmp = Clipper.ScalePointD(intersectPt, _invScale);
       //do the callback
       ZCallback?.Invoke(
         Clipper.ScalePointD(bot1, _invScale),
@@ -3289,11 +3349,12 @@ private void DoHorizontal(Active horz)
     public bool Execute(ClipType clipType, FillRule fillRule, PolyTreeD polytree, PathsD openPaths)
     {
       polytree.Clear();
+      openPaths.Clear();
+      _using_polytree = true;
       (polytree as PolyPathD).Scale = _scale;
 #if USINGZ
       CheckZCallback();
 #endif
-      openPaths.Clear();
       Paths64 oPaths = new Paths64();
       bool success = true;
       try

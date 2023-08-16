@@ -1,9 +1,9 @@
 using Chart3D.MathExtensions;
+using Clipper2AoS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Clipper2AoS;
 
 public partial class Clipper2AoSSystem : SystemBase
 {
@@ -51,11 +51,11 @@ public partial class Clipper2AoSSystem : SystemBase
             .WithCode(() =>
         {
             ClipperL L_c = new ClipperL(Allocator.Temp);
-            PolygonInt _solution = new PolygonInt(2000, Allocator.Temp);            
+            PolygonInt _solution = new PolygonInt(2000, Allocator.Temp);
             for (int i = 0; i < StaticHelper.numberOfPolygons; i++)
             {
-                L_c.AddSubject(_subj);
-                L_c.AddClip(_clip);
+                L_c.AddSubject(ref _subj);
+                L_c.AddClip(ref _clip);
                 L_c.Execute(ClipType.Intersection, FillRule.NonZero, ref _solution);
                 L_c.Clear();
                 _solution.Clear();

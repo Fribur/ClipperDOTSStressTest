@@ -1,18 +1,18 @@
-using Unity.Mathematics;
-using Unity.Collections;
-using Clipper2Lib;
 using Chart3D.MathExtensions;
+using Clipper2Lib;
+using Unity.Collections;
 using Unity.Entities;
+using Unity.Mathematics;
 //using UnityEngine;
 
 public static class StaticHelper
 {
     public static readonly int DisplayWidth = 800;
     public static readonly int DisplayHeight = 600;
-    public static readonly int edgeCount = 450;
+    public static readonly int edgeCount = 1000;
     public static readonly int numberOfPolygons = 10;
     public static void GenerateRandomPath(Random rand, int width, int height, int count, out Paths64 _subj, out Paths64 _clip)
-    {        
+    {
         _subj = new Paths64();
         _clip = new Paths64();
 
@@ -35,12 +35,12 @@ public static class StaticHelper
     }
     public static Paths64 GetPaths64(DynamicBuffer<int2> nodes, DynamicBuffer<int> startIDs)
     {
-        var _paths=new Paths64();
-        for (int i = 0, length= startIDs.Length-1; i < length; i++)
+        var _paths = new Paths64();
+        for (int i = 0, length = startIDs.Length - 1; i < length; i++)
         {
             var start = startIDs[i];
-            var end = startIDs[i+1];
-            var tempPath = new Path64(end-start);
+            var end = startIDs[i + 1];
+            var tempPath = new Path64(end - start);
             for (int k = start; k < end; k++)
             {
                 var node = nodes[k];
@@ -52,7 +52,7 @@ public static class StaticHelper
     }
     public static PolygonInt GetPolygonInt(DynamicBuffer<int2> nodes, DynamicBuffer<int> startIDs, Allocator allocator)
     {
-        return new PolygonInt(nodes.AsNativeArray(), startIDs.AsNativeArray(), allocator);        
+        return new PolygonInt(nodes.AsNativeArray(), startIDs.AsNativeArray(), allocator);
     }
     public static void GenerateRandomPolygon(Random rand, int width, int height, int count, out PolygonInt _subj, out PolygonInt _clip)
     {
@@ -79,5 +79,5 @@ public static class StaticHelper
         int x = rand.NextInt(0, maxWidth);
         int y = rand.NextInt(0, maxHeight);
         return new int2(x, y);
-    }    
+    }
 }

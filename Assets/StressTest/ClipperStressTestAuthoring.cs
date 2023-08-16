@@ -1,4 +1,3 @@
-using System;
 using Unity.Entities;
 using UnityEngine;
 
@@ -10,7 +9,8 @@ class ClipperStressTestBaker : Baker<ClipperStressTestAuthoring>
 {
     public override void Bake(ClipperStressTestAuthoring authoring)
     {
-        AddComponent(new ClipperStressTest { clipperTestType = authoring.clipperTestType });
+        var spawned = GetEntity(TransformUsageFlags.None);
+        AddComponent(spawned, new ClipperStressTest { clipperTestType = authoring.clipperTestType });
     }
 }
 

@@ -1,9 +1,9 @@
 using Chart3D.MathExtensions;
+using Clipper2AoS;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Clipper2AoS;
 public partial class Clipper2AoSBURSTJobsSystem : SystemBase
 {
     EntityQuery polygonQuery;
@@ -43,7 +43,7 @@ public partial class Clipper2AoSBURSTJobsSystem : SystemBase
             else if (polyType.value == PolyType.Clip)
                 _clip = StaticHelper.GetPolygonInt(nodes, startIDs, Allocator.TempJob);
         }
-        var jobHandles = new NativeArray<JobHandle>(StaticHelper.numberOfPolygons+1, Allocator.TempJob);
+        var jobHandles = new NativeArray<JobHandle>(StaticHelper.numberOfPolygons + 1, Allocator.TempJob);
         for (int i = 0; i < StaticHelper.numberOfPolygons; i++)
         {
             jobHandles[i] = Job
@@ -54,8 +54,8 @@ public partial class Clipper2AoSBURSTJobsSystem : SystemBase
             {
                 PolygonInt _solution = new PolygonInt(2000, Allocator.Temp);
                 ClipperL c = new ClipperL(Allocator.Temp);
-                c.AddSubject(_subj);
-                c.AddClip(_clip);
+                c.AddSubject(ref _subj);
+                c.AddClip(ref _clip);
                 c.Execute(ClipType.Intersection, FillRule.NonZero, ref _solution);
                 c.Dispose();
                 _solution.Dispose();

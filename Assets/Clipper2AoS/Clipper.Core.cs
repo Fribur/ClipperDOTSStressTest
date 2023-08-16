@@ -1,11 +1,20 @@
-﻿using Chart3D.MathExtensions;
+﻿/*******************************************************************************
+* Author    :  Angus Johnson                                                   *
+* Date      :  17 July 2023                                                    *
+* Website   :  http://www.angusj.com                                           *
+* Copyright :  Angus Johnson 2010-2023                                         *
+* Purpose   :  Core structures and functions for the Clipper Library           *
+* License   :  http://www.boost.org/LICENSE_1_0.txt                            *
+*******************************************************************************/
+
+using Chart3D.MathExtensions;
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Mathematics;
 using UnityEngine;
 
 namespace Clipper2AoS
-{    
+{
     public struct Rect64
     {
         public long left;
@@ -15,8 +24,6 @@ namespace Clipper2AoS
 
         public Rect64(long l, long t, long r, long b)
         {
-            //if (r < l || b < t)
-            //    Debug.LogError("Invalid Rect64 assignment");
             left = l;
             top = t;
             right = r;
@@ -66,7 +73,7 @@ namespace Clipper2AoS
         {
             return (Math.Max(left, rec.left) <= Math.Min(right, rec.right)) &&
               (Math.Max(top, rec.top) <= Math.Min(bottom, rec.bottom));
-        }       
+        }
 
     }
 
@@ -141,6 +148,17 @@ namespace Clipper2AoS
                     (double)(pt2.y - pt1.y) * (pt3.y - pt2.y));
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static double CrossProduct(double2 vec1, double2 vec2)
+        {
+            return (vec1.y * vec2.x - vec2.y * vec1.x);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static double DotProduct(double2 vec1, double2 vec2)
+        {
+            return (vec1.x * vec2.x + vec1.y * vec2.y);
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static long CheckCastInt64(double val)
         {
             if ((val >= max_coord) || (val <= min_coord)) return Invalid64;
@@ -154,38 +172,37 @@ namespace Clipper2AoS
             double dx1 = (ln1b.x - ln1a.x);
             double dy2 = (ln2b.y - ln2a.y);
             double dx2 = (ln2b.x - ln2a.x);
-            double cp = dy1 * dx2 - dy2 * dx1;
-            if (cp == 0.0)
+            double det = dy1 * dx2 - dy2 * dx1;
+            if (det == 0.0)
             {
                 ip = new long2();
                 return false;
             }
-            double qx = dx1 * ln1a.y - dy1 * ln1a.x;
-            double qy = dx2 * ln2a.y - dy2 * ln2a.x;
-            ip = new long2(
-              CheckCastInt64((dx1 * qy - dx2 * qx) / cp),
-              CheckCastInt64((dy1 * qy - dy2 * qx) / cp));
-            return (ip.x != Invalid64 && ip.y != Invalid64);
+
+            double t = ((ln1a.x - ln2a.x) * dy2 - (ln1a.y - ln2a.y) * dx2) / det;
+            if (t <= 0.0) ip = ln1a;
+            else if (t >= 1.0) ip = ln1b;
+            else ip = new long2(ln1a.x + t * dx1, ln1a.y + t * dy1);
+            return true;
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool GetIntersectPoint(long2 ln1a,
-            long2 ln1b, long2 ln2a, long2 ln2b, out double2 ip)
+              long2 ln1b, long2 ln2a, long2 ln2b, out long2 ip)
         {
             double dy1 = (ln1b.y - ln1a.y);
             double dx1 = (ln1b.x - ln1a.x);
             double dy2 = (ln2b.y - ln2a.y);
             double dx2 = (ln2b.x - ln2a.x);
-            double q1 = dy1 * ln1a.x - dx1 * ln1a.y;
-            double q2 = dy2 * ln2a.x - dx2 * ln2a.y;
-            double cross_prod = dy1 * dx2 - dy2 * dx1;
-            if (cross_prod == 0.0)
+            double det = dy1 * dx2 - dy2 * dx1;
+            if (det == 0.0)
             {
-                ip = new double2();
+                ip = new long2();
                 return false;
             }
-            ip = new double2(
-              (dx2 * q1 - dx1 * q2) / cross_prod,
-              (dy2 * q1 - dy1 * q2) / cross_prod);
+            double t = ((ln1a.x - ln2a.x) * dy2 - (ln1a.y - ln2a.y) * dx2) / det;
+            if (t <= 0.0) ip = ln1a;        // ?? check further (see also #568)
+            else if (t >= 1.0) ip = ln2a;   // ?? check further
+            else ip = new long2(ln1a.x + t * dx1, ln1a.y + t * dy1);
             return true;
         }
         internal static bool SegsIntersect(long2 seg1a,

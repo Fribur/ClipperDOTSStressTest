@@ -9,8 +9,8 @@
 * License   :  http://www.boost.org/LICENSE_1_0.txt                            *
 *******************************************************************************/
 
-using Chart3D.MinHeap;
 using Chart3D.MathExtensions;
+using Chart3D.MinHeap;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -18,8 +18,6 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
-using System.ComponentModel;
-using System.IO;
 
 namespace Clipper2SoA
 {
@@ -70,7 +68,7 @@ namespace Clipper2SoA
             outrecList = new OutRecLL(16, allocator);
             outPtList = new OutPtLL(16, allocator);
             scanlineList = new MinHeap<long>(64, allocator, Comparison.Max);
-            horzSegList =  new NativeList<HorzSegment>(64, allocator);
+            horzSegList = new NativeList<HorzSegment>(64, allocator);
             horzJoinList = new NativeList<HorzJoin>(64, allocator);
             currentLocMin = 0;
             currentBotY = long.MaxValue;
@@ -231,7 +229,7 @@ namespace Clipper2SoA
         {
             return minimaList[actives.localMin[ae1]].polytype == minimaList[actives.localMin[ae2]].polytype;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void SetDx(ref Active ae)
         {
@@ -287,7 +285,7 @@ namespace Clipper2SoA
                   ((vertexList.flags[result] & (VertexFlags.OpenEnd |
                   VertexFlags.LocalMax)) == VertexFlags.None))
 
-            result = vertexList.next[result];
+                    result = vertexList.next[result];
             else
                 while (vertexList.pt[vertexList.prev[result]].y == vertexList.pt[result].y &&
                   ((vertexList.flags[result] & (VertexFlags.OpenEnd |
@@ -307,7 +305,7 @@ namespace Clipper2SoA
                 while (vertexList.pt[vertexList.prev[result]].y == vertexList.pt[result].y) result = vertexList.prev[result];
             if (!IsMaximaVertex(result)) result = -1; // not a maxima
             return result;
-        }       
+        }
 
         public struct IntersectListSort : IComparer<IntersectNode>
         {
@@ -537,7 +535,7 @@ namespace Clipper2SoA
 
             LocalMinima lm = new LocalMinima(vert, vertexList.pt[vert], polytype, isOpen);
             minimaList.Add(lm);
-        }        
+        }
         void EnsureVertexListCapacity(int additionalVertextCount)
         {
             int newSize = vertexList.pt.Length + additionalVertextCount;
@@ -546,106 +544,16 @@ namespace Clipper2SoA
             vertexList.prev.Capacity = newSize;
             vertexList.next.Capacity = newSize;
         }
-        void AddPathsToVertexList(in NativeArray<int2> nodes, in NativeArray<int> startIDs, PathType polytype, bool isOpen)
+        void AddPathsToVertexList(NativeArray<int2> nodes, NativeArray<int> startIDs, PathType polytype, bool isOpen)
         {
-            for (int ComponentID = 0, pathCnt= startIDs.Length - 1; ComponentID < pathCnt; ComponentID++) //for each component of Poly
+            for (int ComponentID = 0, pathCnt = startIDs.Length - 1; ComponentID < pathCnt; ComponentID++) //for each component of Poly
             {
                 int start = startIDs[ComponentID];
                 int end = startIDs[ComponentID + 1];
                 AddPathToVertexList(nodes, start, end, polytype, isOpen);
             }
         }
-        void AddPathsToVertexList(in NativeList<int2> nodes, in NativeList<int> startIDs, PathType polytype, bool isOpen)
-        {
-            for (int componentID = 0, pathCnt = startIDs.Length - 1; componentID < pathCnt; componentID++) //for each component of Poly
-            {
-                int start = startIDs[componentID];
-                int end = startIDs[componentID + 1];
-                AddPathToVertexList(nodes, start, end, polytype, isOpen);
-            }
-        }
-        void AddPathToVertexList(in NativeArray<int2> nodes, int start, int end, PathType polytype, bool isOpen)
-        {
-            int v0 = -1, prev_v = -1, curr_v;
-            for (int i = start; i < end; i++)
-            {
-                var pt = new long2(nodes[i], _scale); //only needed when input data is float or double
-                //var pt = new long2(nodes[i]);
-                if (v0 == -1)
-                {
-                    v0 = vertexList.AddVertex(pt, VertexFlags.None, true);
-                    prev_v = v0;
-                }
-                else if (vertexList.pt[prev_v] != pt) // ie skips duplicates
-                    prev_v = vertexList.AddVertex(pt, VertexFlags.None, false, v0);
-            }
-            if (prev_v == -1 || vertexList.prev[prev_v] == -1) return;
-            //the following eliminates the end point (identical with start) for closed polygons fropm the linked list
-            if (!isOpen && vertexList.pt[prev_v] == vertexList.pt[v0]) prev_v = vertexList.prev[prev_v];
-            vertexList.next[prev_v] = v0;
-            vertexList.prev[v0] = prev_v;
-            if (!isOpen && vertexList.next[prev_v] == prev_v) return;
-
-            // OK, we have a valid path
-            bool going_up, going_up0;
-            if (isOpen)
-            {
-                curr_v = vertexList.next[v0];
-                while (curr_v != v0 && vertexList.pt[curr_v].y == vertexList.pt[v0].y)
-                    curr_v = vertexList.next[curr_v];
-                going_up = vertexList.pt[curr_v].y <= vertexList.pt[v0].y;
-                if (going_up)
-                {
-                    vertexList.flags[v0] = VertexFlags.OpenStart;
-                    AddLocMin(v0, polytype, true);
-                }
-                else
-                    vertexList.flags[v0] = VertexFlags.OpenStart | VertexFlags.LocalMax;
-            }
-            else // closed path
-            {
-                prev_v = vertexList.prev[v0];
-                while (prev_v != v0 && vertexList.pt[prev_v].y == vertexList.pt[v0].y)
-                    prev_v = vertexList.prev[prev_v];
-                if (prev_v == v0)
-                    return; // only open paths can be completely flat
-                going_up = vertexList.pt[prev_v].y > vertexList.pt[v0].y;
-            }
-
-            going_up0 = going_up;
-            prev_v = v0;
-            curr_v = vertexList.next[v0];
-            while (curr_v != v0)
-            {
-                if (vertexList.pt[curr_v].y > vertexList.pt[prev_v].y && going_up)
-                {
-                    vertexList.flags[prev_v] |= VertexFlags.LocalMax;
-                    going_up = false;
-                }
-                else if (vertexList.pt[curr_v].y < vertexList.pt[prev_v].y && !going_up)
-                {
-                    going_up = true;
-                    AddLocMin(prev_v, polytype, isOpen);
-                }
-                prev_v = curr_v;
-                curr_v = vertexList.next[curr_v];
-            }
-
-            if (isOpen)
-            {
-                vertexList.flags[prev_v] |= VertexFlags.OpenEnd;
-                if (going_up)
-                    vertexList.flags[prev_v] |= VertexFlags.LocalMax;
-                else
-                    AddLocMin(prev_v, polytype, isOpen);
-            }
-            else if (going_up != going_up0)
-            {
-                if (going_up0) AddLocMin(prev_v, polytype, false);
-                else vertexList.flags[prev_v] |= VertexFlags.LocalMax;
-            }
-        }
-        void AddPathToVertexList(in NativeList<int2> nodes, int start, int end, PathType polytype, bool isOpen)
+        void AddPathToVertexList(NativeArray<int2> nodes, int start, int end, PathType polytype, bool isOpen)
         {
             int v0 = -1, prev_v = -1, curr_v;
             for (int i = start; i < end; i++)
@@ -727,32 +635,32 @@ namespace Clipper2SoA
             }
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddSubject(in PolygonInt paths)
+        public void AddSubject(ref PolygonInt paths)
         {
-            AddPaths(paths, PathType.Subject);
+            AddPaths(ref paths, PathType.Subject);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddSubject(in NativeArray<int2> nodes, in NativeArray<int> startIDs)
+        public void AddSubject(NativeArray<int2> nodes, NativeArray<int> startIDs)
         {
             AddPaths(nodes, startIDs, PathType.Subject);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddOpenSubject(in PolygonInt paths)
+        public void AddOpenSubject(ref PolygonInt paths)
         {
-            AddPaths(paths, PathType.Subject, true);
+            AddPaths(ref paths, PathType.Subject, true);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddClip(in PolygonInt paths)
+        public void AddClip(ref PolygonInt paths)
         {
-            AddPaths(paths, PathType.Clip);
+            AddPaths(ref paths, PathType.Clip);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddClip(in NativeArray<int2> nodes, in NativeArray<int> startIDs)
+        public void AddClip(NativeArray<int2> nodes, NativeArray<int> startIDs)
         {
             AddPaths(nodes, startIDs, PathType.Clip);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddPath(in NativeArray<int2> nodes, int start, int end, PathType polytype, bool isOpen = false)
+        public void AddPath(NativeArray<int2> nodes, int start, int end, PathType polytype, bool isOpen = false)
         {
             hasOpenPaths = isOpen;
             isSortedMinimaList = false;
@@ -760,15 +668,15 @@ namespace Clipper2SoA
             AddPathToVertexList(nodes, start, end, polytype, isOpen);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddPaths(in PolygonInt path, PathType polytype, bool isOpen = false)
+        public void AddPaths(ref PolygonInt path, PathType polytype, bool isOpen = false)
         {
             if (isOpen) hasOpenPaths = true;
             isSortedMinimaList = false;
             EnsureVertexListCapacity(path.nodes.Length);
-            AddPathsToVertexList(path.nodes, path.startIDs, polytype, isOpen);
+            AddPathsToVertexList(path.nodes.AsArray(), path.startIDs.AsArray(), polytype, isOpen);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddPaths(in NativeArray<int2> nodes, NativeArray<int> startIDs, PathType polytype, bool isOpen = false)
+        public void AddPaths(NativeArray<int2> nodes, NativeArray<int> startIDs, PathType polytype, bool isOpen = false)
         {
             if (isOpen) hasOpenPaths = true;
             isSortedMinimaList = false;
@@ -1192,7 +1100,7 @@ namespace Clipper2SoA
             if (sel_ID == -1) return false;
             sel_ID = actives.nextInSEL[sel_ID];
             return true;
-        }       
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         int AddLocalMinPoly(int ae1, int ae2, long2 pt, bool isNew = false)
@@ -1352,7 +1260,7 @@ namespace Clipper2SoA
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int AddOutPt(int ae, long2 pt)
-        {            
+        {
             // Outrec.OutPts: a circular doubly-linked-list of POutPt where ...
             // opFront[.Prev]* ~~~> opBack & opBack == opFront.Next
             var outrec = actives.outrec[ae];
@@ -1410,7 +1318,7 @@ namespace Clipper2SoA
             InsertScanline(actives.top[ae].y);
 
             CheckJoinLeft(ae, actives.bot[ae]);
-            CheckJoinRight(ae, actives.bot[ae]);
+            CheckJoinRight(ae, actives.bot[ae], true); // (#500
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int FindEdgeWithMatchingLocMin(int e)
@@ -1688,7 +1596,7 @@ namespace Clipper2SoA
                 else
                     actives.curX[ae] = TopX(ae, topY);
                 // NB don't update ae.curr.y yet (see AddNewIntersectNode)
-                ae = actives.nextInAEL[ae]; 
+                ae = actives.nextInAEL[ae];
             }
         }
 
@@ -1717,7 +1625,7 @@ namespace Clipper2SoA
                 DoTopOfScanbeam(y);
                 while (PopHorz(out ae)) DoHorizontal(ae);
             }
- 
+
             if (_succeeded) ProcessHorzJoins();
         }
 
@@ -2007,7 +1915,7 @@ namespace Clipper2SoA
             for (; ; )
             {
                 // loops through consec. horizontal edges (if open)
-                int ae = isLeftToRight ? actives.nextInAEL[horz] : actives.prevInAEL[horz];                
+                int ae = isLeftToRight ? actives.nextInAEL[horz] : actives.prevInAEL[horz];
 
                 while (ae != -1)
                 {
@@ -2077,12 +1985,12 @@ namespace Clipper2SoA
                         ae = actives.prevInAEL[horz];
                     }
 
-                    if (IsHotEdge(horz) && (actives.outrec[horz]!= currOutrec))
+                    if (IsHotEdge(horz) && (actives.outrec[horz] != currOutrec))
                     {
                         currOutrec = actives.outrec[horz];
                         AddToHorzSegList(GetLastOp(horz));
                     }
-                    
+
                 } // we've reached the end of this horizontal
 
                 // check if we've finished looping through consecutive horizontals
@@ -2100,7 +2008,7 @@ namespace Clipper2SoA
                     DeleteFromAEL(horz); // ie open at top
                     return;
                 }
-                else if (vertexList.pt[NextVertex(horz)].y != actives.top[horz].y) 
+                else if (vertexList.pt[NextVertex(horz)].y != actives.top[horz].y)
                     break;
 
                 //still more horizontals in bound to process ...
@@ -2136,7 +2044,7 @@ namespace Clipper2SoA
                         ae = DoMaxima(ae); // TOP OF BOUND (MAXIMA)
                         continue;
                     }
-                    
+
                     // INTERMEDIATE VERTEX ...
                     if (IsHotEdge(ae))
                         AddOutPt(ae, aeTop);
@@ -2237,11 +2145,12 @@ namespace Clipper2SoA
         {
             int prev = actives.prevInAEL[e];
             if (prev == -1 || IsOpen(e) || IsOpen(prev) ||
-              !IsHotEdge(e) || !IsHotEdge(prev) ||
-              pt.y < actives.top[e].y + 2 || pt.y < actives.top[prev].y + 2) return;
+              !IsHotEdge(e) || !IsHotEdge(prev)) return;
+            if ((pt.y < actives.top[e].y + 2 || pt.y < actives.top[prev].y + 2) &&  //avoid trivial joins
+              ((actives.bot[e].y > pt.y) || actives.bot[prev].y > pt.y)) return;    // (#490)
 
             if (checkCurrX)
-            {                
+            {
                 if (ClipperFunc.PerpendicDistFromLineSqrd(pt, actives.bot[prev], actives.top[prev]) > 0.25) return;
             }
             else if (actives.curX[e] != actives.curX[prev]) return;
@@ -2262,16 +2171,16 @@ namespace Clipper2SoA
         {
             int next = actives.nextInAEL[e];
             if (IsOpen(e) || !IsHotEdge(e) || IsJoined(e) ||
-                    next == -1 || IsOpen(next) || !IsHotEdge(next) ||
-                    pt.y < actives.top[e].y + 2 || pt.y < actives.top[next].y + 2) // avoids trivial joins
-                return;
+                    next == -1 || IsOpen(next) || !IsHotEdge(next)) return;
+            if ((pt.y < actives.top[e].y + 2 || pt.y < actives.top[next].y + 2) &&  //avoid trivial joins
+              ((actives.bot[e].y > pt.y) || actives.bot[next].y > pt.y)) return;    // (#490)
 
             if (checkCurrX)
             {
                 if (ClipperFunc.PerpendicDistFromLineSqrd(pt, actives.bot[next], actives.top[next]) > 0.25) return;
             }
             else if (actives.curX[e] != actives.curX[next]) return;
-            if (InternalClipper.CrossProduct(actives.top[e], pt, actives.top[next]) != 0) 
+            if (InternalClipper.CrossProduct(actives.top[e], pt, actives.top[next]) != 0)
                 return;
 
             if (actives.outrec[e] == actives.outrec[next])
@@ -2300,10 +2209,10 @@ namespace Clipper2SoA
             if (outPtList.pt[opP].x == outPtList.pt[opN].x) return false;
             var hs = horzSegList[hsID];
             if (outPtList.pt[opP].x < outPtList.pt[opN].x)
-            {                
+            {
                 hs.leftOp = opP;
                 hs.rightOp = opN;
-                hs.leftToRight = true;                
+                hs.leftToRight = true;
             }
             else
             {
@@ -2373,7 +2282,7 @@ namespace Clipper2SoA
         private void ConvertHorzSegsToJoins()
         {
             int k = 0;
-            for (int hsID = 0, length=horzSegList.Length; hsID < length; hsID++)
+            for (int hsID = 0, length = horzSegList.Length; hsID < length; hsID++)
                 if (UpdateHorzSegment(hsID)) k++;
             if (k < 2) return;
             horzSegList.Sort(new HorzSegSorter(outPtList));
@@ -2489,7 +2398,10 @@ namespace Clipper2SoA
                         else if (Path1InsidePath2(or1, or2))
                             SetOwner(or1, or2);
                         else
+                        {
+                            outrecList.AddSplit(or1, or2); // (#498)
                             outrecList.owner[or2] = or1;
+                        }
                     }
                     else
                         outrecList.owner[or2] = or1;
@@ -2547,7 +2459,7 @@ namespace Clipper2SoA
             {
                 outrecList.pts[outrec] = -1;
                 return;
-            }            
+            }
 
             var startOp = outrecList.pts[outrec];
             var op2 = startOp;
@@ -2842,7 +2754,7 @@ namespace Clipper2SoA
                     exteriorIDs.Add(outrec);
                 }
                 else
-                {                   
+                {
                     var node = components[outrec];
                     polytree.AddChildComponent(outrecList.owner[outrec], node);
                     //Debug.Log($"Outrec {outrec}: child of {outrecList.owner[outrec]} {node.orientation} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes.");
@@ -2872,7 +2784,7 @@ namespace Clipper2SoA
                 next = hole;
             }
             outPolygon.ClosePolygon(); //abuse StartID to store end of last Component
-        }        
+        }
 
         public bool Execute(ClipType clipType, FillRule fillRule, ref PolygonInt solutionClosed, ref PolygonInt solutionOpen)
         {
