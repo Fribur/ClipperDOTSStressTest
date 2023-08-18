@@ -40,36 +40,36 @@ namespace Clipper2AoS
 
         public long Width
         {
-            get => right - left;
+            readonly get => right - left;
             set => right = left + value;
         }
 
         public long Height
         {
-            get => bottom - top;
+            readonly get => bottom - top;
             set => bottom = top + value;
         }
 
-        public bool IsEmpty()
+        public readonly bool IsEmpty()
         {
             return bottom <= top || right <= left;
         }
-        public long2 MidPoint()
+        public readonly long2 MidPoint()
         {
             return new long2((left + right) / 2, (top + bottom) / 2);
         }
-        public bool Contains(long2 pt)
+        public readonly bool Contains(long2 pt)
         {
             return pt.x > left && pt.x < right &&
               pt.y > top && pt.y < bottom;
         }
 
-        public bool Contains(Rect64 rec)
+        public readonly bool Contains(Rect64 rec)
         {
             return rec.left >= left && rec.right <= right &&
               rec.top >= top && rec.bottom <= bottom;
         }
-        public bool Intersects(Rect64 rec)
+        public readonly bool Intersects(Rect64 rec)
         {
             return (Math.Max(left, rec.left) <= Math.Min(right, rec.right)) &&
               (Math.Max(top, rec.top) <= Math.Min(bottom, rec.bottom));

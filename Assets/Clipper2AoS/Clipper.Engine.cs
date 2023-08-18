@@ -17,6 +17,7 @@ using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Clipper2AoS
@@ -57,6 +58,8 @@ namespace Clipper2AoS
         //private readonly double _invScale;
         public bool PreserveCollinear { get; set; }
         public bool ReverseSolution { get; set; }
+        static ProfilerMarker marker1 = new ProfilerMarker("Build");
+        static ProfilerMarker marker2 = new ProfilerMarker("Process");
 
 
         public ClipperL(Allocator allocator, int roundingDecimalPrecision = 2)
@@ -155,15 +158,17 @@ namespace Clipper2AoS
             if (prevID != -1)
             {
                 ref var prev = ref _activesList.ElementAt(prevID);
-                while (prevID != -1 && (IsOpen(ref prev) || !IsHotEdge(ref prev)))
+                while (IsOpen(ref prev) || !IsHotEdge(ref prev))
                 {
                     prevID = prev.prevInAEL;
-                    if (prevID != -1)
-                        prev = ref _activesList.ElementAt(prevID);
+                    if (prevID == -1)
+                        break;
+                    prev = ref _activesList.ElementAt(prevID);
                 }
             }
             return prevID;
         }
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsFront(ref Active ae, int aeID)
@@ -286,32 +291,28 @@ namespace Clipper2AoS
             ref var result = ref _vertexList.ElementAt(resultID);
             if (ae.windDx > 0)
             {
-                ref var resultNext = ref _vertexList.ElementAt(result.next);
-                while (resultNext.pt.y == result.pt.y &&
+                while (_vertexList.ElementAt(result.next).pt.y == result.pt.y &&
                   ((result.flags & (VertexFlags.OpenEnd |
                   VertexFlags.LocalMax)) == VertexFlags.None))
                 {
                     resultID = result.next;
                     result = ref _vertexList.ElementAt(resultID);
-                    resultNext = ref _vertexList.ElementAt(result.next);
                 }
             }
             else
             {
-                ref var resultPrev = ref _vertexList.ElementAt(result.prev);
-                while (resultPrev.pt.y == result.pt.y &&
+                while (_vertexList.ElementAt(result.prev).pt.y == result.pt.y &&
                   ((result.flags & (VertexFlags.OpenEnd |
                   VertexFlags.LocalMax)) == VertexFlags.None))
                 {
                     resultID = result.prev;
                     result = ref _vertexList.ElementAt(resultID);
-                    resultPrev = ref _vertexList.ElementAt(result.prev);
                 }
             }
             if (!IsMaxima(ref result)) resultID = -1; // not a maxima
             return resultID;
-
         }
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetCurrYMaximaVertex(ref Active ae)
@@ -320,22 +321,18 @@ namespace Clipper2AoS
             ref var result = ref _vertexList.ElementAt(resultID);
             if (ae.windDx > 0)
             {
-                ref var resultNext = ref _vertexList.ElementAt(result.next);
-                while (resultNext.pt.y == result.pt.y)
+                while (_vertexList.ElementAt(result.next).pt.y == result.pt.y)
                 {
                     resultID = result.next;
                     result = ref _vertexList.ElementAt(resultID);
-                    resultNext = ref _vertexList.ElementAt(result.next);
                 }
             }
             else
             {
-                ref var resultPrev = ref _vertexList.ElementAt(result.prev);
-                while (resultPrev.pt.y == result.pt.y)
+                while (_vertexList.ElementAt(result.prev).pt.y == result.pt.y)
                 {
                     resultID = result.prev;
                     result = ref _vertexList.ElementAt(resultID);
-                    resultPrev = ref _vertexList.ElementAt(result.prev);
                 }
             }
             if (!IsMaxima(ref result)) resultID = -1; // not a maxima
@@ -407,21 +404,20 @@ namespace Clipper2AoS
             if (newOwner.owner != -1)
             {
                 ref var newOwnerOwner = ref _outrecList.ElementAt(newOwner.owner);
-                while (newOwner.owner != -1 && newOwnerOwner.pts == -1)
+                while (newOwnerOwner.pts == -1)
                 {
                     newOwner.owner = newOwnerOwner.owner;
-                    if (newOwner.owner != -1)
-                        newOwnerOwner = ref _outrecList.ElementAt(newOwner.owner);
+                    if (newOwner.owner == -1)
+                        break;
+                    newOwnerOwner = ref _outrecList.ElementAt(newOwner.owner);
                 }
             }
 
             //make sure that outrec isn't an owner of newOwner
             var tmpID = newOwnerID;
             while (tmpID != -1 && tmpID != outrecID)
-            {
-                ref var tmp = ref _outrecList.ElementAt(tmpID);
-                tmpID = tmp.owner;
-            }
+                tmpID = _outrecList.ElementAt(tmpID).owner;
+
             if (tmpID != -1)
                 newOwner.owner = outrec.owner;
             outrec.owner = newOwnerID;
@@ -832,11 +828,12 @@ namespace Clipper2AoS
             if (ae2ID != -1)
             {
                 ref var ae2 = ref _activesList.ElementAt(ae2ID);
-                while (ae2ID != -1 && (GetPolyType(ref ae2) != pt || IsOpen(ref ae2)))
+                while (GetPolyType(ref ae2) != pt || IsOpen(ref ae2))
                 {
                     ae2ID = ae2.prevInAEL;
-                    if (ae2ID != -1)
-                        ae2 = ref _activesList.ElementAt(ae2ID);
+                    if (ae2ID == -1)
+                        break;
+                    ae2 = ref _activesList.ElementAt(ae2ID);
                 }
             }
 
@@ -1383,8 +1380,6 @@ namespace Clipper2AoS
             return newOpID;
         }
 
-
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int NewOutRec()
         {
@@ -1720,7 +1715,8 @@ namespace Clipper2AoS
                 _activesList.ElementAt(prevID).nextInAEL = nextID;
             else
                 _activesID = nextID;
-            if (nextID != -1) _activesList.ElementAt(nextID).prevInAEL = prevID;
+            if (nextID != -1)
+                _activesList.ElementAt(nextID).prevInAEL = prevID;
             //delete &ae;
         }
 
@@ -1763,7 +1759,7 @@ namespace Clipper2AoS
                 }
                 _currentBotY = y; // bottom of scanbeam
                 if (!PopScanline(out y))
-                    break; // y new top of scanbeam
+                    break; // y new top of scanbeam                
                 DoIntersections(y);
                 DoTopOfScanbeam(y);
                 while (PopHorz(out aeID)) DoHorizontal(aeID);
@@ -1788,7 +1784,7 @@ namespace Clipper2AoS
             if (!InternalClipper.GetIntersectPt(
               ae1.bot, ae1.top, ae2.bot, ae2.top, out long2 ip))
                 ip = new long2(ae1.curX, topY);
-            //Debug.Log($"{ip.x:D9} {ip.y:D9} (SoA new intersect node)");
+
             if (ip.y > _currentBotY || ip.y < topY)
             {
                 double absDx1 = math.abs(ae1.dx);
@@ -1835,8 +1831,10 @@ namespace Clipper2AoS
             ae1.nextInSEL = ae2ID;
             ae2.prevInSEL = ae1ID;
         }
+
         private bool BuildIntersectList(long topY)
         {
+
             if (_activesID == -1 || _activesList.ElementAt(_activesID).nextInAEL == -1) return false;
 
             // Calculate edge positions at the top of the current scanbeam, and from this
@@ -1849,7 +1847,6 @@ namespace Clipper2AoS
             // Re merge sorts see https://stackoverflow.com/a/46319131/359538
 
             int leftID = _selID, rightID = -1, lEndID = -1, rEndID = -1, currBaseID = -1, prevBaseID = -1, tmpID = -1;
-
             ref var left = ref _activesList.ElementAt(leftID);
             while (left.jump != -1)
             {
@@ -1864,8 +1861,6 @@ namespace Clipper2AoS
                     left.jump = rEndID;
                     while (leftID != lEndID && rightID != rEndID)
                     {
-                        left = ref _activesList.ElementAt(leftID); //while redundant for first iteration, leftID could change during loop, so need to fetch it again
-                        right = ref _activesList.ElementAt(rightID); //while redundant for first iteration, leftID could change during loop, so need to fetch it again
                         if (right.curX < left.curX)
                         {
                             tmpID = right.prevInSEL;
@@ -1874,13 +1869,15 @@ namespace Clipper2AoS
                             {
                                 AddNewIntersectNode(ref tmp, tmpID, ref right, rightID, topY);
                                 if (tmpID == leftID) break;
-                                tmpID = tmp.prevInSEL!;
+                                tmpID = tmp.prevInSEL;
                                 tmp = ref _activesList.ElementAt(tmpID);
                             }
 
                             tmpID = rightID;
                             tmp = ref _activesList.ElementAt(tmpID);
                             rightID = ExtractFromSEL(ref tmp);
+                            if (rightID != -1)
+                                right = ref _activesList.ElementAt(rightID);
                             lEndID = rightID;
                             Insert1Before2InSEL(ref tmp, tmpID, ref left, leftID);
                             if (leftID == currBaseID)
@@ -1891,16 +1888,18 @@ namespace Clipper2AoS
                                 else _activesList.ElementAt(prevBaseID).jump = currBaseID;
                             }
                         }
-                        else leftID = left.nextInSEL;
+                        else
+                        {
+                            leftID = left.nextInSEL;
+                            left = ref _activesList.ElementAt(leftID);
+                        }
                     }
-
                     prevBaseID = currBaseID;
                     leftID = rEndID;
                 }
                 leftID = _selID;
                 left = ref _activesList.ElementAt(leftID);
             }
-
             return _intersectList.Length > 0;
         }
 
@@ -1913,7 +1912,7 @@ namespace Clipper2AoS
             // crucial that intersections only occur between adjacent edges.
 
             // First we do a quicksort so intersections proceed in a bottom up order ...
-            _intersectList.Sort(new IntersectListSort());
+            _intersectList.Sort(default(IntersectListSort));
 
             // Now as we process these intersections, we must sometimes adjust the order
             // to ensure that intersecting edges are always adjacent ...
@@ -1957,7 +1956,7 @@ namespace Clipper2AoS
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool ResetHorzDirection(ref Active horz, int vertexMax,
-                out long leftX, out long rightX)
+        out long leftX, out long rightX)
         {
             if (horz.bot.x == horz.top.x)
             {
@@ -1968,11 +1967,12 @@ namespace Clipper2AoS
                 if (aeID != -1)
                 {
                     ref var ae = ref _activesList.ElementAt(aeID);
-                    while (aeID != -1 && ae.vertexTop != vertexMax)
+                    while (ae.vertexTop != vertexMax)
                     {
                         aeID = ae.nextInAEL;
-                        if (aeID != -1)
-                            ae = ref _activesList.ElementAt(aeID);
+                        if (aeID == -1)
+                            break;
+                        ae = ref _activesList.ElementAt(aeID);
                     }
                 }
                 return aeID != -1;
@@ -3162,102 +3162,6 @@ namespace Clipper2AoS
                 }
             }
         }
-        //private bool DeepCheckOwnerOld(ref OutRec outrec, int outrecID, int ownerID)
-        //{
-        //    ref var outrecOwner = ref _outrecList.ElementAt(outrec.owner);
-        //    if (outrecOwner.bounds.IsEmpty()) outrecOwner.bounds = GetBounds(ref _outPtList.ElementAt(outrecOwner.pts), outrecOwner.pts);
-
-        //    bool isInsideOwnerBounds = outrecOwner.bounds.Contains(outrec.bounds);
-
-        //    // while looking for the correct owner, check the owner's
-        //    // splits **before** checking the owner itself because
-        //    // splits can occur internally, and checking the owner
-        //    // first would miss the inner split's true ownership
-        //    var asplitID = outrecOwner.splitStart;
-        //    if (asplitID != -1)
-        //    {
-        //        do
-        //        {
-        //            int splitID = GetRealOutRec(asplitID);
-        //            if (splitID == -1 || splitID <= ownerID || splitID == outrecID)
-        //            {
-        //                asplitID = nextSplit[asplitID];
-        //                continue;
-        //            }
-
-        //            if (_outrecList.ElementAt(splitID).splitStart != -1 && DeepCheckOwnerOld(ref outrec, outrecID, splitID)) return true;
-
-        //            ref var split = ref _outrecList.ElementAt(splitID);
-        //            if (split.bounds.IsEmpty()) split.bounds = GetBounds(ref _outPtList.ElementAt(split.pts), split.pts);
-
-        //            if (split.bounds.Contains(outrec.bounds) && Path1InsidePath2(outrec.pts, split.pts))
-        //            {
-        //                outrec.owner = splitID;
-        //                return true;
-        //            }
-        //            asplitID = nextSplit[asplitID];
-        //        } while (asplitID != -1);
-        //    }
-
-        //    // only continue when not inside recursion
-        //    if (ownerID != outrec.owner) return false;
-
-        //    outrecOwner = ref _outrecList.ElementAt(outrec.owner);
-        //    for (; ; )
-        //    {                
-        //        if (isInsideOwnerBounds && Path1InsidePath2(outrec.pts, outrecOwner.pts))
-        //            return true;
-
-        //        outrec.owner = outrecOwner.owner;
-        //        if (outrec.owner == -1) return false;
-        //        outrecOwner = ref _outrecList.ElementAt(outrec.owner);
-        //        isInsideOwnerBounds = outrecOwner.bounds.Contains(outrec.bounds);
-        //    }
-        //}
-        //bool BuildTreeOld(ref PolyTree polytree, ref PolygonInt solutionOpen)
-        //{
-        //    polytree.Clear();
-        //    solutionOpen.Clear();
-        //    solutionOpen.nodes.Capacity = _outPtList.Length;
-        //    solutionOpen.startIDs.Capacity = _outrecList.Length;
-        //    var components = polytree.components;
-        //    var exteriorIDs = polytree.exteriorIDs;
-        //    for (int i = 0, length = _outrecList.Length; i < length; i++)
-        //        components.Add(new TreeNode(i)); //initialize
-
-        //    for (int outrecID = 0; outrecID < _outrecList.Length; outrecID++)
-        //    {
-        //        ref var outrec = ref _outrecList.ElementAt(outrecID);
-        //        if (outrec.pts == -1) continue;
-
-        //        if (outrec.isOpen)
-        //        {
-        //            BuildPath(outrec.pts, ReverseSolution, true, ref solutionOpen);
-        //            continue;
-        //        }
-        //        if (!IsValidClosedPath(outrec.pts))
-        //            continue;
-        //        if (outrec.bounds.IsEmpty()) outrec.bounds = GetBounds(ref _outPtList.ElementAt(outrec.pts), outrec.pts);
-
-        //        outrec.owner = GetRealOutRec(outrec.owner);
-        //        if (outrec.owner != -1)
-        //            DeepCheckOwnerOld(ref outrec, outrecID, outrec.owner);
-
-        //        if (outrec.owner == -1) //if no owner, definitely an outer polygon
-        //        {
-        //            //Debug.Log($"Outrec {outrec}: outer with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes");
-        //            exteriorIDs.Add(outrecID);
-        //        }
-        //        else
-        //        {
-        //            //var node = components[outrecID];
-        //            //polytree.AddChildComponent(outrec.owner, node);
-        //            polytree.AddChildComponent(outrec.owner, outrecID);
-        //            //Debug.Log($"Outrec {outrec}: child of {outrecList.owner[outrec]} {node.orientation} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes.");
-        //        }
-        //    }
-        //    return true;
-        //}
         public void GetPolygonWithHoles(in PolyTree polyTree, int outrecID, ref PolygonInt outPolygon)
         {
             ref var outrec = ref _outrecList.ElementAt(outrecID);
@@ -3289,7 +3193,6 @@ namespace Clipper2AoS
             _succeeded = true;
             solutionClosed.Clear();
             solutionOpen.Clear();
-
             ExecuteInternal(clipType, fillRule);
             BuildPaths(ref solutionClosed, ref solutionOpen);
 
@@ -3337,29 +3240,6 @@ namespace Clipper2AoS
             return curID;
         }
 
-        //public int AddSplit(ref OutRec _owningOutRec, int _splitOutRecID)
-        //{
-        //    int curID = splits.Length;
-        //    SplitCandidate split = new SplitCandidate { outrec = _splitOutRecID, nextSplit = -1 };
-        //    splits.Add(split); //_splitOutRec is stored at index curID
-        //    if (_owningOutRec.splitStart != -1)
-        //    {
-        //        //first, search the last index where splits of _owningOutRec are stored
-        //        int splitsEnd, tmp = _owningOutRec.splitStart;
-        //        do
-        //        {
-        //            splitsEnd = tmp;
-        //            tmp = splits[tmp].nextSplit;
-        //        } while (tmp != -1);
-        //        var lastSplit = splits[splitsEnd];
-        //        lastSplit.nextSplit = curID; //then point "next" of that end to the newly added _splitOutRec (stored at curID) 
-        //    }
-        //    else
-        //    {
-        //        _owningOutRec.splitStart = curID; //point Start of the _owningOutRec splitlist to the newly added _splitOutRec (stored at curID)
-        //    }
-        //    return curID;
-        //}
         //public void PrintSize()
         //{
         //    Debug.Log($"Vertices: {_vertexList.Length}");
