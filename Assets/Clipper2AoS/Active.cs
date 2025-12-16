@@ -36,7 +36,7 @@ namespace Clipper2AoS
         public int vertexTop;
         public LocalMinima localMin;
         internal bool isLeftBound;
-        internal JoinWith joinWith;        
-    };    
+        internal JoinWith joinWith;
+    };
 
 } //namespace

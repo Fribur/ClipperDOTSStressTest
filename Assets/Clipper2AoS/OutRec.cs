@@ -1,6 +1,4 @@
-﻿
-
-namespace Clipper2AoS
+﻿namespace Clipper2AoS
 {
     // OutRec: path data structure for clipping solutions
     public struct OutRec

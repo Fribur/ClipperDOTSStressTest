@@ -1,5 +1,4 @@
-﻿
-namespace Clipper2AoS
+﻿namespace Clipper2AoS
 {
     // OutPt: vertex data structure for clipping solutions
     public struct SplitCandidate

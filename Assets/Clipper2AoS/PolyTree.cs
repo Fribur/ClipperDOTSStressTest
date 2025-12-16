@@ -1,7 +1,5 @@
-﻿using System.Linq;
-using Unity.Collections;
+﻿using Unity.Collections;
 using Unity.Jobs;
-using UnityEngine;
 
 namespace Clipper2AoS
 {

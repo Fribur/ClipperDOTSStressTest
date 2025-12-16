@@ -1,5 +1,6 @@
 using Chart3D.MathExtensions;
 using Clipper2Lib;
+using GluonGui.WorkspaceWindow.Views.WorkspaceExplorer.Explorer;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -53,6 +54,11 @@ public static class StaticHelper
     public static PolygonInt GetPolygonInt(DynamicBuffer<int2> nodes, DynamicBuffer<int> startIDs, Allocator allocator)
     {
         return new PolygonInt(nodes.AsNativeArray(), startIDs.AsNativeArray(), allocator);
+    }
+    public static void GetPolygon(DynamicBuffer<Nodes> nodesBuffer, DynamicBuffer<StartIDs> startIDsBuffer, out NativeArray<int2> nodes, out NativeArray<int> startIDs, Allocator allocator)
+    {
+        nodes = CollectionHelper.CreateNativeArray<int2>(nodesBuffer.Reinterpret<int2>().AsNativeArray(), allocator);
+        startIDs = CollectionHelper.CreateNativeArray<int>(startIDsBuffer.Reinterpret<int>().AsNativeArray(), allocator);
     }
     public static void GenerateRandomPolygon(Random rand, int width, int height, int count, out PolygonInt _subj, out PolygonInt _clip)
     {

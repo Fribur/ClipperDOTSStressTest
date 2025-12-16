@@ -1,7 +1,7 @@
-using Unity.Entities;
-using Unity.Jobs;
 using Clipper2Lib;
 using Unity.Collections;
+using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 
 public partial class Clipper2Class : SystemBase
@@ -22,8 +22,6 @@ public partial class Clipper2Class : SystemBase
     {
         if (SystemAPI.GetSingleton<ClipperStressTest>().clipperTestType != ClipperTestType.Clipper2Lib)
             return;
-        //if (SystemAPI.GetSingleton<ClipperStressTest>().clipperTestType != ClipperTestType.Clipper2AoS)
-        //    return;
 
         if (polygonQuery.IsEmpty)
             return;
@@ -43,17 +41,15 @@ public partial class Clipper2Class : SystemBase
             else if (polyType.value == PolyType.Clip)
                 _clip = StaticHelper.GetPaths64(nodes, startIDs);
         }
-        Job.WithoutBurst().WithCode(() =>
+
+        for (int i = 0; i < StaticHelper.numberOfPolygons; i++)
         {
-            for (int i = 0; i < StaticHelper.numberOfPolygons; i++)
-            {
-                Clipper64 c = new Clipper64();
-                c.AddSubject(_subj);
-                c.AddClip(_clip);
-                c.Execute(ClipType.Intersection, FillRule.NonZero, _solution);
-                c.Clear();
-                _solution.Clear();
-            }
-        }).Run();
+            Clipper64 c = new Clipper64();
+            c.AddSubject(_subj);
+            c.AddClip(_clip);
+            c.Execute(ClipType.Intersection, FillRule.NonZero, _solution);
+            c.Clear();
+            _solution.Clear();
+        }
     }    
 }

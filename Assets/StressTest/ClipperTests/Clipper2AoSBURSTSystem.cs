@@ -1,28 +1,28 @@
 using Chart3D.MathExtensions;
 using Clipper2AoS;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 
-public partial class Clipper2AoSBURSTSystem : SystemBase
+public partial struct Clipper2AoSBURSTSystem : ISystem
 {
     EntityQuery polygonQuery;
-
-    protected override void OnCreate()
+    void OnCreate(ref SystemState state)
     {
         polygonQuery = new EntityQueryBuilder(Allocator.Temp)
                             .WithAll<PolygonType>()
                             .WithAll<Nodes>()
                             .WithAll<StartIDs>()
-                            .Build(World.EntityManager);
-        RequireForUpdate<ClipperStressTest>();
+                            .Build(ref state);
+        state.RequireForUpdate<ClipperStressTest>();
     }
-    protected override void OnDestroy()
+    void OnDestroy(ref SystemState state)
     {
     }
 
-    protected override void OnUpdate()
+    void OnUpdate(ref SystemState state)
     {
         if (SystemAPI.GetSingleton<ClipperStressTest>().clipperTestType != ClipperTestType.Clipper2AoSBURST)
             return;
@@ -31,51 +31,55 @@ public partial class Clipper2AoSBURSTSystem : SystemBase
             return;
 
         var polgyonEntities = polygonQuery.ToEntityArray(Allocator.Temp);
-        PolygonInt _subj = default;
-        PolygonInt _clip = default;
+        NativeArray<int2> subjectNodes = default;
+        NativeArray<int> subjectStartIDs = default;
+        NativeArray<int2> clipNodes = default;
+        NativeArray<int> clipStartIDs = default;
         for (int i = 0, length = polgyonEntities.Length; i < length; i++)
         {
             var entity = polgyonEntities[i];
             var polyType = SystemAPI.GetComponent<PolygonType>(entity);
-            var nodes = SystemAPI.GetBuffer<Nodes>(entity).Reinterpret<int2>();
-            var startIDs = SystemAPI.GetBuffer<StartIDs>(entity).Reinterpret<int>();
+            var nodesBuffer = SystemAPI.GetBuffer<Nodes>(entity);
+            var startIDsBuffer = SystemAPI.GetBuffer<StartIDs>(entity);
             if (polyType.value == PolyType.Subject)
-                _subj = StaticHelper.GetPolygonInt(nodes, startIDs, Allocator.TempJob);
+                StaticHelper.GetPolygon(nodesBuffer, startIDsBuffer, out subjectNodes, out subjectStartIDs, Allocator.Persistent);
             else if (polyType.value == PolyType.Clip)
-                _clip = StaticHelper.GetPolygonInt(nodes, startIDs, Allocator.TempJob);
+                StaticHelper.GetPolygon(nodesBuffer, startIDsBuffer, out clipNodes, out clipStartIDs, Allocator.Persistent);
         }
-        Job
-            .WithBurst()
-            .WithReadOnly(_subj)
-            .WithReadOnly(_clip)
-            .WithCode(() =>
+
+        var clipper2AoSJob = new Clipper2AoSJob()
+        {
+            subjectNodes = subjectNodes,
+            subjectStartIDs = subjectStartIDs,
+            clipNodes = clipNodes,
+            clipStartIDs = clipStartIDs
+        };
+        state.Dependency = clipper2AoSJob.Schedule(state.Dependency);
+        subjectNodes.Dispose(state.Dependency);
+        subjectStartIDs.Dispose(state.Dependency);
+        clipNodes.Dispose(state.Dependency);
+        clipStartIDs.Dispose(state.Dependency);
+    }
+    [BurstCompile]
+    struct Clipper2AoSJob : IJob
+    {
+        [ReadOnly] public NativeArray<int2> subjectNodes;
+        [ReadOnly] public NativeArray<int> subjectStartIDs;
+        [ReadOnly] public NativeArray<int2> clipNodes;
+        [ReadOnly] public NativeArray<int> clipStartIDs;
+
+        public void Execute()
         {
             ClipperL L_c = new ClipperL(Allocator.Temp);
             PolygonInt _solution = new PolygonInt(2000, Allocator.Temp);
             for (int i = 0; i < StaticHelper.numberOfPolygons; i++)
             {
-                L_c.AddSubject(ref _subj);
-                L_c.AddClip(ref _clip);
+                L_c.AddSubject(subjectNodes, subjectStartIDs);
+                L_c.AddClip(clipNodes, clipStartIDs);
                 L_c.Execute(ClipType.Intersection, FillRule.NonZero, ref _solution);
                 L_c.Clear();
                 _solution.Clear();
             }
-        }).Schedule();
-        _subj.Dispose(Dependency);
-        _clip.Dispose(Dependency);
+        }
     }
 }
-////example use of tree structure to access polygons directly from outPtList and OutRecList 
-//var jobClipper2 = new ClipperD(Allocator.Temp);
-//var earthLandPoly = new Polygon(100, Allocator.Temp);
-//jobClipper2.AddSubject(subjectPolgyon);
-//jobClipper2.AddClip(L_mapUnionPoly);
-//PolyTree result = new PolyTree(4, Allocator.Temp);
-//jobClipper2.Execute(ClipType.Difference, FillRule.NonZero, ref result, ref earthLandPoly);
-//earthLandPoly.Clear();
-//for (int h = 0, length = result.exteriorIDs.Length; h < length; h++) //now tesselate each polygon of solution
-//{
-//    jobClipper2.GetPolygonWithHoles(result, result.exteriorIDs[h], ref earthLandPoly);
-//    //..etc pp
-//    earthLandPoly.Clear();
-//}

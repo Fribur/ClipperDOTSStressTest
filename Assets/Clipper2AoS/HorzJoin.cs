@@ -1,6 +1,4 @@
-﻿using Unity.Collections.LowLevel.Unsafe;
-
-namespace Clipper2AoS
+﻿namespace Clipper2AoS
 {
     public struct HorzJoin
     {
@@ -11,6 +9,6 @@ namespace Clipper2AoS
             op1 = ltor;
             op2 = rtol;
         }
-    };    
+    };
 
 } //namespace

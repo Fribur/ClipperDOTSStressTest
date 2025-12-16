@@ -1,5 +1,5 @@
-﻿using Unity.Mathematics;
-using Chart3D.MathExtensions;
+﻿using Chart3D.MathExtensions;
+using Unity.Mathematics;
 
 namespace Clipper2AoS
 {
@@ -11,11 +11,11 @@ namespace Clipper2AoS
         }
         public static double Sqr(double value)
         {
-          return value * value;
+            return value * value;
         }
         public static bool PointsNearEqual(double2 pt1, double2 pt2, double distanceSqrd)
         {
-          return Sqr(pt1.x - pt2.x) + Sqr(pt1.y - pt2.y) < distanceSqrd;
+            return Sqr(pt1.x - pt2.x) + Sqr(pt1.y - pt2.y) < distanceSqrd;
         }
         public static double PerpendicDistFromLineSqrd(long2 pt, long2 line1, long2 line2)
         {
@@ -27,4 +27,4 @@ namespace Clipper2AoS
             return Sqr(a * d - c * b) / (c * c + d * d);
         }
     }
-} 
+}

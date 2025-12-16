@@ -41,11 +41,11 @@ namespace Chart3D.MathExtensions
             y = (long)math.round(pt.y * scale);
         }
 
-        public long2(double2 pt, double scale)
-        {
-            x = (long)math.round(pt.x * scale);
-            y = (long)math.round(pt.y * scale);
-        }
+        //public long2(double2 pt, double scale)
+        //{
+        //    x = (long)math.round(pt.x * scale);
+        //    y = (long)math.round(pt.y * scale);
+        //}
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator ==(long2 lhs, long2 rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -59,6 +59,7 @@ namespace Chart3D.MathExtensions
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double2 operator *(double lhs, long2 rhs) { return new double2(lhs * rhs.x, lhs * rhs.y); }
         public static implicit operator int2(long2 value) => new int2((int)value.x, (int)value.y);
+        public static implicit operator long2(int2 value) => new long2(value.x, value.y);
         public override bool Equals(object obj)
         {
             if (obj != null && obj is long2 p)
@@ -74,10 +75,12 @@ namespace Chart3D.MathExtensions
 
         public override int GetHashCode()
         {
-            int hash = 17;
-            hash = hash * 29 + (int)x;
-            hash = hash * 29 + (int)y;
-            return hash;
+            //return HashCode.Combine(x, y);
+
+            int hashCode = 2055808453;
+            hashCode = hashCode * -1521134295 + x.GetHashCode();
+            hashCode = hashCode * -1521134295 + y.GetHashCode();
+            return hashCode;
         }
     }
 

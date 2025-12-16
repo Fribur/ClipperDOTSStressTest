@@ -34,9 +34,9 @@ namespace Clipper2AoS
             return currentID;
         }
         public static Vertex PrevVertex(ref this NativeList<Vertex> vertices, int index)
-        {            
+        {
             return vertices[vertices[index].prev];
         }
-    };    
+    };
 
 } //namespace

@@ -1,5 +1,4 @@
 ﻿using Chart3D.MathExtensions;
-using Unity.Collections.LowLevel.Unsafe;
 
 namespace Clipper2AoS
 {

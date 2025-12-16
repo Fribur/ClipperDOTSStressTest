@@ -17,7 +17,6 @@ using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Unity.Profiling;
 using UnityEngine;
 
 namespace Clipper2AoS
@@ -29,7 +28,7 @@ namespace Clipper2AoS
     [Flags]
     public enum PointInPolygonResult { IsOn = 0, IsInside = 1, IsOutside = 2 };
     public enum VertexFlags { None = 0, OpenStart = 1, OpenEnd = 2, LocalMax = 4, LocalMin = 8 };
-    public struct ClipperL
+    public struct ClipperL : IDisposable
     {
         ClipType _cliptype;
         FillRule _fillrule;
@@ -58,8 +57,13 @@ namespace Clipper2AoS
         //private readonly double _invScale;
         public bool PreserveCollinear { get; set; }
         public bool ReverseSolution { get; set; }
-        static ProfilerMarker marker1 = new ProfilerMarker("Build");
-        static ProfilerMarker marker2 = new ProfilerMarker("Process");
+        bool _isCreated;
+        public readonly bool IsCreated
+        {
+            get => _isCreated;
+        }
+        //static ProfilerMarker marker1 = new ProfilerMarker("Build");
+        //static ProfilerMarker marker2 = new ProfilerMarker("Process");
 
 
         public ClipperL(Allocator allocator, int roundingDecimalPrecision = 2)
@@ -68,13 +72,16 @@ namespace Clipper2AoS
             _fillrule = FillRule.EvenOdd;
             _activesID = -1;
             _selID = -1;
+            _isCreated = true;
+
             //input lists
-            _vertexList = new NativeList<Vertex>(128, allocator);
+            _vertexList = new NativeList<Vertex>(1024, allocator);
             _minimaList = new NativeList<LocalMinima>(1024, allocator);
+
             //solution lists
-            _activesList = new NativeList<Active>(256, allocator);
-            _intersectList = new NativeList<IntersectNode>(1024, allocator);
-            _outrecList = new NativeList<OutRec>(16, allocator);
+            _activesList = new NativeList<Active>(128, allocator);
+            _intersectList = new NativeList<IntersectNode>(128, allocator);
+            _outrecList = new NativeList<OutRec>(256, allocator);
             _outPtList = new NativeList<OutPt>(1024, allocator);
             _scanlineList = new MinHeap<long>(64, allocator, Comparison.Max);
             _horzSegList = new NativeList<HorzSegment>(64, allocator);
@@ -538,6 +545,8 @@ namespace Clipper2AoS
             _activesID = -1;
             _selID = -1;
             _succeeded = true;
+
+            _outPtList.Capacity = _vertexList.Length;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -3212,9 +3221,8 @@ namespace Clipper2AoS
             _using_polytree = true;
             ExecuteInternal(clipType, fillRule);
             BuildTree(ref polytree, ref openPaths);
-            //BuildTreeOld(ref polytree, ref openPaths);
 
-            //ClearSolution();
+            //ClearSolutionOnly(); //cannot access Polytree anymore once cleared
             return _succeeded;
         }
         public int AddSplit(ref OutRec _owningOutRec, int _splitOutRecID)
@@ -3240,16 +3248,16 @@ namespace Clipper2AoS
             return curID;
         }
 
-        //public void PrintSize()
-        //{
-        //    Debug.Log($"Vertices: {_vertexList.Length}");
-        //    Debug.Log($"Minimalist: {_minimaList.Length} ");
-        //    Debug.Log($"OutPoints: {_outPtList.Length} ");
-        //    Debug.Log($"OutRecs: {_outrecList.Length} ");
-        //    Debug.Log($"Actives: {_activesList.Length} ");
-        //    Debug.Log($"Intersects: {_intersectList.Length} ");
-        //    Debug.Log($"splits: {splits.Length} ");
-        //}
+        public void PrintSize()
+        {
+            Debug.Log($"Vertices: {_vertexList.Length}");
+            Debug.Log($"Minimalist: {_minimaList.Length} ");
+            Debug.Log($"OutPoints: {_outPtList.Length} ");
+            Debug.Log($"OutRecs: {_outrecList.Length} ");
+            Debug.Log($"Actives: {_activesList.Length} ");
+            Debug.Log($"Intersects: {_intersectList.Length} ");
+            Debug.Log($"splits: {splits.Length} ");
+        }
 
     } //ClipperBase class
 
