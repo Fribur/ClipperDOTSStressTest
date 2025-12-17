@@ -1,5 +1,5 @@
 
 namespace Chart3D.MathExtensions
 {
-    public enum ClipType { None, Intersection, Union, Difference, DifferenceRev, Xor };
+    public enum ClipType { NoClip, Intersection, Union, Difference, DifferenceRev, Xor };
 }

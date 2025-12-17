@@ -1,4 +1,5 @@
 ﻿using Chart3D.MathExtensions;
+using System.Runtime.CompilerServices;
 using Unity.Collections;
 
 namespace Clipper2AoS
@@ -6,6 +7,12 @@ namespace Clipper2AoS
 
     public static class ClipperExtensions
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void EnsureCapacity<T>(this NativeList<T> list, int minCapacity) where T : unmanaged
+        {
+            if (list.Capacity < minCapacity)
+                list.Capacity = minCapacity;
+        }
         public static int AddVertex(ref this NativeList<Vertex> vertices, long2 vertex, VertexFlags flag, bool firstVertex, int firstVertexID = 0)
         {
             int currentID = vertices.Length;

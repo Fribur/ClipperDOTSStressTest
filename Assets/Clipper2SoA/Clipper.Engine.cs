@@ -57,7 +57,7 @@ namespace Clipper2SoA
 
         public ClipperD(Allocator allocator, int roundingDecimalPrecision = 2)
         {
-            cliptype = ClipType.None;
+            cliptype = ClipType.NoClip;
             fillrule = FillRule.EvenOdd;
             actives = new ActiveLL(16, allocator);
             actives_ID = -1;
@@ -1603,7 +1603,7 @@ namespace Clipper2SoA
         void ExecuteInternal(ClipType ct, FillRule fillRule)
         {
             //Debug.Log($"Vertices: {vertexList.pt.Length}");
-            if (ct == ClipType.None) return;
+            if (ct == ClipType.NoClip) return;
             fillrule = fillRule;
             cliptype = ct;
             Reset();

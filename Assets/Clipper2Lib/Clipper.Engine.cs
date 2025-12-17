@@ -1,12 +1,12 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
-* Date      :  19 July 2023                                                    *
-* Website   :  http://www.angusj.com                                           *
-* Copyright :  Angus Johnson 2010-2023                                         *
+* Date      :  5 November 2025                                                 *
+* Website   :  https://www.angusj.com                                          *
+* Copyright :  Angus Johnson 2010-2025                                         *
 * Purpose   :  This is the main polygon clipping module                        *
 * Thanks    :  Special thanks to Thong Nguyen, Guus Kuiper, Phil Stopford,     *
 *           :  and Daniel Gosnell for their invaluable assistance with C#.     *
-* License   :  http://www.boost.org/LICENSE_1_0.txt                            *
+* License   :  https://www.boost.org/LICENSE_1_0.txt                           *
 *******************************************************************************/
 
 #nullable enable
@@ -15,7 +15,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
+#if USINGZ
+namespace Clipper2ZLib
+#else
 namespace Clipper2Lib
+#endif
 {
 
   // Vertex: a pre-clipping data structure. It is used to separate polygons
@@ -27,7 +31,7 @@ namespace Clipper2Lib
     IsOn = 0,
     IsInside = 1,
     IsOutside = 2
-  };
+  }
 
   [Flags]
   internal enum VertexFlags
@@ -37,11 +41,11 @@ namespace Clipper2Lib
     OpenEnd = 2,
     LocalMax = 4,
     LocalMin = 8
-  };
+  }
 
   internal class Vertex
   {
-    public readonly Point64 pt;
+    public Point64 pt;
     public Vertex? next;
     public Vertex? prev;
     public VertexFlags flags;
@@ -53,7 +57,7 @@ namespace Clipper2Lib
       next = null;
       this.prev = prev;
     }
-  };
+  }
 
   internal readonly struct LocalMinima
   {
@@ -87,7 +91,7 @@ namespace Clipper2Lib
     {
       return vertex.GetHashCode();
     }
-  };
+  }
 
   // IntersectNode: a structure representing 2 intersecting edges.
   // Intersections must be sorted so they are processed from the largest
@@ -104,11 +108,11 @@ namespace Clipper2Lib
       this.edge1 = edge1;
       this.edge2 = edge2;
     }
-  };
+  }
 
   internal struct LocMinSorter : IComparer<LocalMinima>
   {
-    public int Compare(LocalMinima locMin1, LocalMinima locMin2)
+    public readonly int Compare(LocalMinima locMin1, LocalMinima locMin2)
     {
       return locMin2.vertex.pt.Y.CompareTo(locMin1.vertex.pt.Y);
     }
@@ -131,41 +135,27 @@ namespace Clipper2Lib
       prev = this;
       horz = null;
     }
-  };
+  }
 
-  internal enum JoinWith { None, Left, Right };
-  internal enum HorzPosition { Bottom, Middle, Top };
+  internal enum JoinWith { None, Left, Right }
+  internal enum HorzPosition { Bottom, Middle, Top }
 
 
   // OutRec: path data structure for clipping solutions
   internal class OutRec
   {
     public int idx;
+    public int outPtCount;
     public OutRec? owner;
     public Active? frontEdge;
     public Active? backEdge;
     public OutPt? pts;
     public PolyPathBase? polypath;
-    public Rect64 bounds = new Rect64();
+    public Rect64 bounds;
     public Path64 path = new Path64();
     public bool isOpen;
-    public List<int>? splits = null;
-  };
-
-  internal struct HorzSegSorter : IComparer<HorzSegment>
-  {
-    public int Compare(HorzSegment? hs1, HorzSegment? hs2)
-    {
-      if (hs1 == null || hs2 == null) return 0;
-      if (hs1.rightOp == null)
-      {
-        return hs2.rightOp == null ? 0 : 1;
-      }
-      else if (hs2.rightOp == null)
-        return -1;
-      else
-        return hs1.leftOp!.pt.X.CompareTo(hs2.leftOp!.pt.X);
-    }
+    public List<int>? splits;
+    public OutRec? recursiveSplit;
   }
 
   internal class HorzSegment
@@ -225,7 +215,7 @@ namespace Clipper2Lib
     public LocalMinima localMin; // the bottom of an edge 'bound' (also Vatti)
     internal bool isLeftBound;
     internal JoinWith joinWith;
-  };
+  }
 
   internal static class ClipperEngine
   {
@@ -240,12 +230,19 @@ namespace Clipper2Lib
       minimaList.Add(lm);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void EnsureCapacity<T>(this List<T> list, int minCapacity)
+    {
+      if(list.Capacity < minCapacity)
+        list.Capacity = minCapacity;
+    }
+
     internal static void AddPathsToVertexList(Paths64 paths, PathType polytype, bool isOpen,
-      List<LocalMinima> minimaList, List<Vertex> vertexList)
+      List<LocalMinima> minimaList, VertexPoolList vertexList)
     {
       int totalVertCnt = 0;
       foreach (Path64 path in paths) totalVertCnt += path.Count;
-      vertexList.Capacity = vertexList.Count + totalVertCnt;
+      vertexList.EnsureCapacity(vertexList.Count + totalVertCnt);
 
       foreach (Path64 path in paths)
       {
@@ -254,26 +251,24 @@ namespace Clipper2Lib
         {
           if (v0 == null)
           {
-            v0 = new Vertex(pt, VertexFlags.None, null);
-            vertexList.Add(v0);
+            v0 = vertexList.Add(pt, VertexFlags.None, null);
             prev_v = v0;
           }
           else if (prev_v!.pt != pt) // ie skips duplicates
           {
-            curr_v = new Vertex(pt, VertexFlags.None, prev_v);
-            vertexList.Add(curr_v);
+            curr_v = vertexList.Add(pt, VertexFlags.None, prev_v);
             prev_v.next = curr_v;
             prev_v = curr_v;
           }
         }
-        if (prev_v == null || prev_v.prev == null) continue;
+        if (prev_v?.prev == null) continue;
         if (!isOpen && prev_v.pt == v0!.pt) prev_v = prev_v.prev;
         prev_v.next = v0;
         v0!.prev = prev_v;
         if (!isOpen && prev_v.next == prev_v) continue;
 
         // OK, we have a valid path
-        bool going_up, going_up0;
+        bool going_up;
         if (isOpen)
         {
           curr_v = v0.next;
@@ -298,7 +293,7 @@ namespace Clipper2Lib
           going_up = prev_v.pt.Y > v0.pt.Y;
         }
 
-        going_up0 = going_up;
+        bool going_up0 = going_up;
         prev_v = v0;
         curr_v = v0.next;
         while (curr_v != v0)
@@ -337,11 +332,11 @@ namespace Clipper2Lib
   public class ReuseableDataContainer64
   {
     internal readonly List<LocalMinima> _minimaList;
-    internal readonly List<Vertex> _vertexList;
+    internal readonly VertexPoolList _vertexList;
     public ReuseableDataContainer64()
     {
       _minimaList = new List<LocalMinima>();
-      _vertexList = new List<Vertex>();
+      _vertexList = new VertexPoolList();
     }
     public void Clear()
     {
@@ -361,13 +356,15 @@ namespace Clipper2Lib
     private FillRule _fillrule;
     private Active? _actives;
     private Active? _sel;
+    private Stack<Active> _freeActives;
     private readonly List<LocalMinima> _minimaList;
     private readonly List<IntersectNode> _intersectList;
-    private readonly List<Vertex> _vertexList;
-    private readonly List<OutRec> _outrecList;
+    private readonly VertexPoolList _vertexList;
+    private readonly OutRecPoolList _outrecList;
     private readonly List<long> _scanlineList;
     private readonly List<HorzSegment> _horzSegList;
-    private readonly List<HorzJoin> _horzJoinList;
+    private readonly HorzJoinPoolList _horzJoinList;
+    private readonly OutPtPoolList _outPtPool;
     private int _currentLocMin;
     private long _currentBotY;
     private bool _isSortedMinimaList;
@@ -388,11 +385,13 @@ namespace Clipper2Lib
     {
       _minimaList = new List<LocalMinima>();
       _intersectList = new List<IntersectNode>();
-      _vertexList = new List<Vertex>();
-      _outrecList = new List<OutRec>();
+      _vertexList = new VertexPoolList();
+      _outrecList = new OutRecPoolList();
       _scanlineList = new List<long>();
       _horzSegList = new List<HorzSegment>();
-      _horzJoinList = new List<HorzJoin>();
+      _horzJoinList = new HorzJoinPoolList();
+      _outPtPool = new OutPtPoolList();
+      _freeActives = new Stack<Active>();
       PreserveCollinear = true;
     }
 
@@ -496,9 +495,7 @@ namespace Clipper2Lib
       double dy = pt2.Y - pt1.Y;
       if (dy != 0)
         return (pt2.X - pt1.X) / dy;
-      if (pt2.X > pt1.X)
-        return double.NegativeInfinity;
-      return double.PositiveInfinity;
+      return pt2.X > pt1.X ? double.NegativeInfinity : double.PositiveInfinity;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -506,7 +503,9 @@ namespace Clipper2Lib
     {
       if ((currentY == ae.top.Y) || (ae.top.X == ae.bot.X)) return ae.top.X;
       if (currentY == ae.bot.Y) return ae.bot.X;
-      return ae.bot.X + (long) Math.Round(ae.dx * (currentY - ae.bot.Y));
+
+      // use MidpointRounding.ToEven in order to explicitly match the nearbyint behaviour on the C++ side
+      return ae.bot.X + (long) Math.Round(ae.dx * (currentY - ae.bot.Y), MidpointRounding.ToEven);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -555,17 +554,13 @@ namespace Clipper2Lib
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vertex NextVertex(Active ae)
     {
-      if (ae.windDx > 0)
-        return ae.vertexTop!.next!;
-      return ae.vertexTop!.prev!;
+      return ae.windDx > 0 ? ae.vertexTop!.next! : ae.vertexTop!.prev!;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vertex PrevPrevVertex(Active ae)
     {
-      if (ae.windDx > 0)
-        return ae.vertexTop!.prev!.prev!;
-      return ae.vertexTop!.next!.next!;
+      return ae.windDx > 0 ? ae.vertexTop!.prev!.prev! : ae.vertexTop!.next!.next!;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -583,8 +578,7 @@ namespace Clipper2Lib
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Active? GetMaximaPair(Active ae)
     {
-      Active? ae2;
-      ae2 = ae.nextInAEL;
+      Active? ae2 = ae.nextInAEL;
       while (ae2 != null)
       {
         if (ae2.vertexTop == ae.vertexTop) return ae2; // Found!
@@ -625,14 +619,11 @@ namespace Clipper2Lib
 
     private struct IntersectListSort : IComparer<IntersectNode>
     {
-      public int Compare(IntersectNode a, IntersectNode b)
+      public readonly int Compare(IntersectNode a, IntersectNode b)
       {
-        if (a.pt.Y == b.pt.Y)
-        {
-          if (a.pt.X == b.pt.X) return 0;
-          return (a.pt.X < b.pt.X) ? -1 : 1;
-        }
-        return (a.pt.Y > b.pt.Y) ? -1 : 1;
+        if (a.pt.Y != b.pt.Y) return (a.pt.Y > b.pt.Y) ? -1 : 1;
+        if (a.pt.X == b.pt.X) return 0;
+        return (a.pt.X < b.pt.X) ? -1 : 1;
       }
     }
 
@@ -724,6 +715,14 @@ namespace Clipper2Lib
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsValidOwner(OutRec? outRec, OutRec? testOwner)
+    {
+      while ((testOwner != null) && (testOwner != outRec))
+        testOwner = testOwner.owner;
+      return testOwner == null;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void UncoupleOutRec(Active ae)
     {
       OutRec? outrec = ae.outrec;
@@ -766,6 +765,8 @@ namespace Clipper2Lib
       _outrecList.Clear();
       _horzSegList.Clear();
       _horzJoinList.Clear();
+      _outPtPool.Clear();
+      _freeActives.Clear();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -788,7 +789,7 @@ namespace Clipper2Lib
         _isSortedMinimaList = true;
       }
 
-      _scanlineList.Capacity = _minimaList.Count;
+      _scanlineList.EnsureCapacity(_minimaList.Count);
       for (int i = _minimaList.Count - 1; i >= 0; i--)
         _scanlineList.Add(_minimaList[i].vertex.pt.Y);
 
@@ -835,17 +836,6 @@ namespace Clipper2Lib
     private LocalMinima PopLocalMinima()
     {
       return _minimaList[_currentLocMin++];
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void AddLocMin(Vertex vert, PathType polytype, bool isOpen)
-    {
-      // make sure the vertex is added only once ...
-      if ((vert.flags & VertexFlags.LocalMin) != VertexFlags.None) return;
-      vert.flags |= VertexFlags.LocalMin;
-
-      LocalMinima lm = new LocalMinima(vert, polytype, isOpen);
-      _minimaList.Add(lm);
     }
    
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -919,7 +909,7 @@ namespace Clipper2Lib
           {
             FillRule.Positive => ae.windCount2 > 0,
             FillRule.Negative => ae.windCount2 < 0,
-            _ => ae.windCount2 != 0,
+            _ => ae.windCount2 != 0
           };
 
         case ClipType.Union:
@@ -927,7 +917,7 @@ namespace Clipper2Lib
           {
             FillRule.Positive => ae.windCount2 <= 0,
             FillRule.Negative => ae.windCount2 >= 0,
-            _ => ae.windCount2 == 0,
+            _ => ae.windCount2 == 0
           };
 
         case ClipType.Difference:
@@ -935,7 +925,7 @@ namespace Clipper2Lib
           {
             FillRule.Positive => (ae.windCount2 <= 0),
             FillRule.Negative => (ae.windCount2 >= 0),
-            _ => (ae.windCount2 == 0),
+            _ => (ae.windCount2 == 0)
           };
           return (GetPolyType(ae) == PathType.Subject) ? result : !result;
 
@@ -1094,7 +1084,7 @@ namespace Clipper2Lib
         return newcomer.curX > resident.curX;
 
       // get the turning direction  a1.top, a2.bot, a2.top
-      double d = InternalClipper.CrossProduct(resident.top, newcomer.bot, newcomer.top);
+      int d = InternalClipper.CrossProductSign(resident.top, newcomer.bot, newcomer.top);
       if (d != 0) return (d < 0);
 
       // edges must be collinear to get here
@@ -1103,13 +1093,13 @@ namespace Clipper2Lib
       // the direction they're about to turn
       if (!IsMaxima(resident) && (resident.top.Y > newcomer.top.Y))
       {
-        return InternalClipper.CrossProduct(newcomer.bot,
+        return InternalClipper.CrossProductSign(newcomer.bot,
           resident.top, NextVertex(resident).pt) <= 0;
       }
 
       if (!IsMaxima(newcomer) && (newcomer.top.Y > resident.top.Y))
       {
-        return InternalClipper.CrossProduct(newcomer.bot,
+        return InternalClipper.CrossProductSign(newcomer.bot,
           newcomer.top, NextVertex(newcomer).pt) >= 0;
       }
 
@@ -1121,18 +1111,16 @@ namespace Clipper2Lib
       // resident must also have just been inserted
       if (resident.isLeftBound != newcomerIsLeft)
         return newcomerIsLeft;
-      if (InternalClipper.CrossProduct(PrevPrevVertex(resident).pt,
-            resident.bot, resident.top) == 0) return true;
+      if (InternalClipper.IsCollinear(PrevPrevVertex(resident).pt,
+            resident.bot, resident.top)) return true;
       // compare turning direction of the alternate bound
-      return (InternalClipper.CrossProduct(PrevPrevVertex(resident).pt,
+      return (InternalClipper.CrossProductSign(PrevPrevVertex(resident).pt,
         newcomer.bot, PrevPrevVertex(newcomer).pt) > 0) == newcomerIsLeft;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void InsertLeftEdge(Active ae)
     {
-      Active ae2;
-
       if (_actives == null)
       {
         ae.prevInAEL = null;
@@ -1148,7 +1136,7 @@ namespace Clipper2Lib
       }
       else
       {
-        ae2 = _actives;
+        Active ae2 = _actives;
         while (ae2.nextInAEL != null && IsValidAelOrder(ae2.nextInAEL, ae))
           ae2 = ae2.nextInAEL;
         //don't separate joined edges
@@ -1171,48 +1159,44 @@ namespace Clipper2Lib
 
     private void InsertLocalMinimaIntoAEL(long botY)
     {
-      LocalMinima localMinima;
-      Active? leftBound, rightBound;
       // Add any local minima (if any) at BotY ...
       // NB horizontal local minima edges should contain locMin.vertex.prev
       while (HasLocMinAtY(botY))
       {
-        localMinima = PopLocalMinima();
+        LocalMinima localMinima = PopLocalMinima();
+        Active? leftBound;
         if ((localMinima.vertex.flags & VertexFlags.OpenStart) != VertexFlags.None)
         {
           leftBound = null;
         }
         else
         {
-          leftBound = new Active
-          {
-            bot = localMinima.vertex.pt,
-            curX = localMinima.vertex.pt.X,
-            windDx = -1,
-            vertexTop = localMinima.vertex.prev,
-            top = localMinima.vertex.prev!.pt,
-            outrec = null,
-            localMin = localMinima
-          };
+          leftBound = NewActive();
+          leftBound.bot = localMinima.vertex.pt;
+          leftBound.curX = localMinima.vertex.pt.X;
+          leftBound.windDx = -1;
+          leftBound.vertexTop = localMinima.vertex.prev;
+          leftBound.top = localMinima.vertex.prev!.pt;
+          leftBound.outrec = null;
+          leftBound.localMin = localMinima;
           SetDx(leftBound);
         }
 
+        Active? rightBound;
         if ((localMinima.vertex.flags & VertexFlags.OpenEnd) != VertexFlags.None)
         {
           rightBound = null;
         }
         else
         {
-          rightBound = new Active
-          {
-            bot = localMinima.vertex.pt,
-            curX = localMinima.vertex.pt.X,
-            windDx = 1,
-            vertexTop = localMinima.vertex.next, // i.e. ascending
-            top = localMinima.vertex.next!.pt,
-            outrec = null,
-            localMin = localMinima
-          };
+          rightBound = NewActive();
+          rightBound.bot = localMinima.vertex.pt;
+          rightBound.curX = localMinima.vertex.pt.X;
+          rightBound.windDx = 1;
+          rightBound.vertexTop = localMinima.vertex.next; // i.e. ascending
+          rightBound.top = localMinima.vertex.next!.pt;
+          rightBound.outrec = null;
+          rightBound.localMin = localMinima;
           SetDx(rightBound);
         }
 
@@ -1352,7 +1336,7 @@ namespace Clipper2Lib
         }
       }
 
-      OutPt op = new OutPt(pt, outrec);
+      OutPt op = _outPtPool.Add(pt, outrec);
       outrec.pts = op;
       return op;
     }
@@ -1446,6 +1430,7 @@ namespace Clipper2Lib
       ae2.outrec.frontEdge = null;
       ae2.outrec.backEdge = null;
       ae2.outrec.pts = null;
+      ae1.outrec.outPtCount += ae2.outrec.outPtCount;
       SetOwner(ae2.outrec, ae1.outrec);
 
       if (IsOpenEnd(ae1))
@@ -1460,7 +1445,7 @@ namespace Clipper2Lib
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static OutPt AddOutPt(Active ae, Point64 pt)
+    private OutPt AddOutPt(Active ae, Point64 pt)
     {
 
       // Outrec.OutPts: a circular doubly-linked-list of POutPt where ...
@@ -1470,10 +1455,15 @@ namespace Clipper2Lib
       OutPt opFront = outrec.pts!;
       OutPt opBack = opFront.next!;
 
-      if (toFront && (pt == opFront.pt)) return opFront;
-      else if (!toFront && (pt == opBack.pt)) return opBack;
+      switch (toFront)
+      {
+        case true when (pt == opFront.pt):
+          return opFront;
+        case false when (pt == opBack.pt):
+          return opBack;
+      }
 
-      OutPt newOp = new OutPt(pt, outrec);
+      OutPt newOp = _outPtPool.Add(pt, outrec);
       opBack.prev = newOp;
       newOp.prev = opFront;
       newOp.next = opBack;
@@ -1485,11 +1475,9 @@ namespace Clipper2Lib
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private OutRec NewOutRec()
     {
-      OutRec result = new OutRec
-      {
-        idx = _outrecList.Count
-      };
-      _outrecList.Add(result);
+      int idx = _outrecList.Count;
+      OutRec result = _outrecList.Add();
+      result.idx = idx;
       return result;
     }
 
@@ -1510,7 +1498,7 @@ namespace Clipper2Lib
       }
 
       ae.outrec = outrec;
-      OutPt op = new OutPt(pt, outrec);
+      OutPt op = _outPtPool.Add(pt, outrec);
       outrec.pts = op;
       return op;
     }
@@ -1526,7 +1514,11 @@ namespace Clipper2Lib
 
       if (IsJoined(ae)) Split(ae, ae.bot);
 
-      if (IsHorizontal(ae)) return;
+      if (IsHorizontal(ae)) 
+      {
+        if (!IsOpen(ae)) TrimHorz(ae, PreserveCollinear);
+        return; 
+      }
       InsertScanline(ae.top.Y);
 
       CheckJoinLeft(ae, ae.bot);
@@ -1553,33 +1545,34 @@ namespace Clipper2Lib
       return result;
     }
 
-    private OutPt? IntersectEdges(Active ae1, Active ae2, Point64 pt)
+    private void IntersectEdges(Active ae1, Active ae2, Point64 pt)
     {
       OutPt? resultOp = null;
-
       // MANAGE OPEN PATH INTERSECTIONS SEPARATELY ...
       if (_hasOpenPaths && (IsOpen(ae1) || IsOpen(ae2)))
       {
-        if (IsOpen(ae1) && IsOpen(ae2)) return null;
+        if (IsOpen(ae1) && IsOpen(ae2)) return;
         // the following line avoids duplicating quite a bit of code
         if (IsOpen(ae2)) SwapActives(ref ae1, ref ae2);
         if (IsJoined(ae2)) Split(ae2, pt); // needed for safety
 
         if (_cliptype == ClipType.Union)
         {
-          if (!IsHotEdge(ae2)) return null;
+          if (!IsHotEdge(ae2)) return;
         }
-        else if (ae2.localMin.polytype == PathType.Subject)
-          return null;
+        else if (ae2.localMin.polytype == PathType.Subject) return;
 
         switch (_fillrule)
         {
           case FillRule.Positive:
-            if (ae2.windCount != 1) return null; break;
+            if (ae2.windCount != 1) return; 
+            break;
           case FillRule.Negative:
-            if (ae2.windCount != -1) return null; break;
+            if (ae2.windCount != -1) return; 
+            break;
           default:
-            if (Math.Abs(ae2.windCount) != 1) return null; break;
+            if (Math.Abs(ae2.windCount) != 1) return; 
+            break;
         }
 
         // toggle contribution ...
@@ -1610,7 +1603,7 @@ namespace Clipper2Lib
               SetSides(ae3.outrec!, ae1, ae3);
             else
               SetSides(ae3.outrec!, ae3, ae1);
-            return ae3.outrec!.pts;
+            return;
           }
 
           resultOp = StartOpenPath(ae1, pt);
@@ -1621,7 +1614,7 @@ namespace Clipper2Lib
 #if USINGZ
         SetZ(ae1, ae2, ref resultOp.pt);
 #endif
-        return resultOp;
+        return;
       }
 
       // MANAGING CLOSED PATHS FROM HERE ON
@@ -1682,7 +1675,8 @@ namespace Clipper2Lib
       bool e1WindCountIs0or1 = oldE1WindCount == 0 || oldE1WindCount == 1;
       bool e2WindCountIs0or1 = oldE2WindCount == 0 || oldE2WindCount == 1;
 
-      if ((!IsHotEdge(ae1) && !e1WindCountIs0or1) || (!IsHotEdge(ae2) && !e2WindCountIs0or1)) return null;
+      if ((!IsHotEdge(ae1) && !e1WindCountIs0or1) || 
+        (!IsHotEdge(ae2) && !e2WindCountIs0or1)) return;
 
       // NOW PROCESS THE INTERSECTION ...
 
@@ -1701,7 +1695,7 @@ namespace Clipper2Lib
         else if (IsFront(ae1) || (ae1.outrec == ae2.outrec))
         {
           // this 'else if' condition isn't strictly needed but
-          // it's sensible to split polygons that ony touch at
+          // it's sensible to split polygons that only touch at
           // a common vertex (not at common edges).
           resultOp = AddLocalMaxPoly(ae1, ae2, pt);
 #if USINGZ
@@ -1775,11 +1769,11 @@ namespace Clipper2Lib
         }
         else if (oldE1WindCount == 1 && oldE2WindCount == 1)
         {
-          resultOp = null;
+          resultOp = null; 
           switch (_cliptype)
           {
             case ClipType.Union:
-              if (e1Wc2 > 0 && e2Wc2 > 0) return null;
+              if (e1Wc2 > 0 && e2Wc2 > 0) return;
               resultOp = AddLocalMinPoly(ae1, ae2, pt);
               break;
 
@@ -1797,7 +1791,7 @@ namespace Clipper2Lib
               break;
 
             default: // ClipType.Intersection:
-              if (e1Wc2 <= 0 || e2Wc2 <= 0) return null;
+              if (e1Wc2 <= 0 || e2Wc2 <= 0) return;
               resultOp = AddLocalMinPoly(ae1, ae2, pt);
               break;
           }
@@ -1806,8 +1800,6 @@ namespace Clipper2Lib
 #endif
         }
       }
-
-      return resultOp;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1822,6 +1814,45 @@ namespace Clipper2Lib
         _actives = next;
       if (next != null) next.prevInAEL = prev;
       // delete &ae;
+      PoolDeletedActive(ae);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void PoolDeletedActive(Active ae)
+    {
+      //clear refs to allow GC
+      ae.bot = new Point64();
+      ae.top = new Point64();
+      ae.dx = 0.0;
+      ae.windCount = 0;
+      ae.windCount2 = 0;
+      ae.outrec = null;
+      ae.prevInAEL = null;
+      ae.nextInAEL = null;
+      ae.prevInSEL = null;
+      ae.nextInSEL = null;
+      ae.jump = null;
+      ae.vertexTop = null;
+      ae.localMin = new LocalMinima();
+      ae.isLeftBound = false;
+      ae.joinWith = JoinWith.None;
+      _freeActives.Push(ae);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private Active NewActive()
+    {
+      Active ae;
+      if (_freeActives.Count == 0)
+      {        
+        ae = new Active();
+      }
+      else
+      {
+        //recycle active from free list
+        ae = _freeActives.Pop();
+      }
+      return ae;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1834,10 +1865,9 @@ namespace Clipper2Lib
         ae.prevInSEL = ae.prevInAEL;
         ae.nextInSEL = ae.nextInAEL;
         ae.jump = ae.nextInSEL;
-        if (ae.joinWith == JoinWith.Left)
-          ae.curX = ae.prevInAEL!.curX; // this also avoids complications
-        else
-          ae.curX = TopX(ae, topY);
+        // it is safe to ignore 'joined' edges here because
+        // if necessary they will be split in IntersectEdges()
+        ae.curX = TopX(ae, topY);
         // NB don't update ae.curr.Y yet (see AddNewIntersectNode)
         ae = ae.nextInAEL;
       }
@@ -1845,7 +1875,7 @@ namespace Clipper2Lib
 
     protected void ExecuteInternal(ClipType ct, FillRule fillRule)
     {
-      if (ct == ClipType.None) return;
+      if (ct == ClipType.NoClip) return;
       _fillrule = fillRule;
       _cliptype = ct;
       Reset();
@@ -1873,11 +1903,9 @@ namespace Clipper2Lib
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void DoIntersections(long topY)
     {
-      if (BuildIntersectList(topY))
-      {
-        ProcessIntersectList();
-        DisposeIntersectNodes();
-      }
+      if (!BuildIntersectList(topY)) return;
+      ProcessIntersectList();
+      DisposeIntersectNodes();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1889,31 +1917,41 @@ namespace Clipper2Lib
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void AddNewIntersectNode(Active ae1, Active ae2, long topY)
     {
-      if (!InternalClipper.GetIntersectPt(
+      if (!InternalClipper.GetLineIntersectPt(
         ae1.bot, ae1.top, ae2.bot, ae2.top, out Point64 ip))
-        ip = new Point64(ae1.curX, topY);
+          ip = new Point64(ae1.curX, topY);
 
       if (ip.Y > _currentBotY || ip.Y < topY)
       {
         double absDx1 = Math.Abs(ae1.dx);
         double absDx2 = Math.Abs(ae2.dx);
-        if (absDx1 > 100 && absDx2 > 100)
+        switch (absDx1 > 100)
         {
-          if (absDx1 > absDx2)
+          case true when absDx2 > 100:
+          {
+            if (absDx1 > absDx2)
+              ip = InternalClipper.GetClosestPtOnSegment(ip, ae1.bot, ae1.top);
+            else
+              ip = InternalClipper.GetClosestPtOnSegment(ip, ae2.bot, ae2.top);
+            break;
+          }
+          case true:
             ip = InternalClipper.GetClosestPtOnSegment(ip, ae1.bot, ae1.top);
-          else
-            ip = InternalClipper.GetClosestPtOnSegment(ip, ae2.bot, ae2.top);
-        }
-        else if (absDx1 > 100)
-          ip = InternalClipper.GetClosestPtOnSegment(ip, ae1.bot, ae1.top);
-        else if (absDx2 > 100)
-          ip = InternalClipper.GetClosestPtOnSegment(ip, ae2.bot, ae2.top);
-        else
-        {
-          if (ip.Y < topY) ip.Y = topY;
-          else ip.Y = _currentBotY;
-          if (absDx1 < absDx2) ip.X = TopX(ae1, ip.Y);
-          else ip.X = TopX(ae2, ip.Y);
+            break;
+          default:
+          {
+            if (absDx2 > 100)
+              ip = InternalClipper.GetClosestPtOnSegment(ip, ae2.bot, ae2.top);
+            else
+            {
+              if (ip.Y < topY) ip.Y = topY;
+              else ip.Y = _currentBotY;
+              if (absDx1 < absDx2) ip.X = TopX(ae1, ip.Y);
+              else ip.X = TopX(ae2, ip.Y);
+            }
+
+            break;
+          }
         }
       }
       IntersectNode node = new IntersectNode(ip, ae1, ae2);
@@ -1942,7 +1980,7 @@ namespace Clipper2Lib
 
     private bool BuildIntersectList(long topY)
     {
-      if (_actives == null || _actives.nextInAEL == null) return false;
+      if (_actives?.nextInAEL == null) return false;
 
       // Calculate edge positions at the top of the current scanbeam, and from this
       // we will determine the intersections required to reach these new positions.
@@ -1953,23 +1991,23 @@ namespace Clipper2Lib
       // stored in FIntersectList ready to be processed in ProcessIntersectList.
       // Re merge sorts see https://stackoverflow.com/a/46319131/359538
 
-      Active? left = _sel, right, lEnd, rEnd, currBase, prevBase, tmp;
+      Active? left = _sel;
 
       while (left!.jump != null)
       {
-        prevBase = null;
-        while (left != null && left.jump != null)
+        Active? prevBase = null;
+        while (left?.jump != null)
         {
-          currBase = left;
-          right = left.jump;
-          lEnd = right;
-          rEnd = right.jump;
+          Active? currBase = left;
+          Active? right = left.jump;
+          Active? lEnd = right;
+          Active? rEnd = right.jump;
           left.jump = rEnd;
           while (left != lEnd && right != rEnd)
           {
             if (right!.curX < left!.curX)
             {
-              tmp = right.prevInSEL!;
+              Active? tmp = right.prevInSEL!;
               for (; ; )
               {
                 AddNewIntersectNode(tmp, right, topY);
@@ -1981,13 +2019,11 @@ namespace Clipper2Lib
               right = ExtractFromSEL(tmp);
               lEnd = right;
               Insert1Before2InSEL(tmp, left);
-              if (left == currBase)
-              {
-                currBase = tmp;
-                currBase.jump = rEnd;
-                if (prevBase == null) _sel = currBase;
-                else prevBase.jump = currBase;
-              }
+              if (left != currBase) continue;
+              currBase = tmp;
+              currBase.jump = rEnd;
+              if (prevBase == null) _sel = currBase;
+              else prevBase.jump = currBase;
             }
             else left = left.nextInSEL;
           }
@@ -2078,13 +2114,6 @@ namespace Clipper2Lib
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool HorzIsSpike(Active horz)
-    {
-      Point64 nextPt = NextVertex(horz).pt;
-      return (horz.bot.X < horz.top.X) != (horz.top.X < nextPt.X);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void TrimHorz(Active horzEdge, bool preserveCollinear)
     {
       bool wasTrimmed = false;
@@ -2115,7 +2144,7 @@ namespace Clipper2Lib
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private OutPt GetLastOp(Active hotEdge)
+    private static OutPt GetLastOp(Active hotEdge)
     { 
       OutRec outrec = hotEdge.outrec!;
       return (hotEdge == outrec.frontEdge) ?
@@ -2138,19 +2167,12 @@ private void DoHorizontal(Active horz)
      *         /              |        /       |       /                            *
      *******************************************************************************/
     {
-      Point64 pt;
       bool horzIsOpen = IsOpen(horz);
       long Y = horz.bot.Y;
 
       Vertex? vertex_max = horzIsOpen ?
         GetCurrYMaximaVertex_Open(horz) :
         GetCurrYMaximaVertex(horz);
-
-      // remove 180 deg.spikes and also simplify
-      // consecutive horizontals when PreserveCollinear = true
-      if (vertex_max != null &&
-        !horzIsOpen && vertex_max != horz.vertexTop)
-        TrimHorz(horz, PreserveCollinear);
 
       bool isLeftToRight =
         ResetHorzDirection(horz, vertex_max, out long leftX, out long rightX);
@@ -2164,7 +2186,6 @@ private void DoHorizontal(Active horz)
 #endif
         AddToHorzSegList(op);
       }
-      OutRec? currOutrec = horz.outrec!;
 
       for (; ; )
       {
@@ -2176,7 +2197,7 @@ private void DoHorizontal(Active horz)
           if (ae.vertexTop == vertex_max)
           {
             // do this first!!
-            if (IsHotEdge(horz) && IsJoined(ae!)) Split(ae, ae.top);
+            if (IsHotEdge(horz) && IsJoined(ae)) Split(ae, ae.top);
 
             if (IsHotEdge(horz))
             {
@@ -2197,6 +2218,7 @@ private void DoHorizontal(Active horz)
 
           // if horzEdge is a maxima, keep going until we reach
           // its maxima pair, otherwise check for break conditions
+          Point64 pt;
           if (vertex_max != horz.vertexTop || IsOpenEnd(horz))
           {
             // otherwise stop when 'ae' is beyond the end of the horizontal line
@@ -2228,6 +2250,7 @@ private void DoHorizontal(Active horz)
           {
             IntersectEdges(horz, ae, pt);
             SwapPositionsInAEL(horz, ae);
+            CheckJoinLeft(ae, pt);
             horz.curX = ae.curX;
             ae = horz.nextInAEL;
           }
@@ -2235,15 +2258,13 @@ private void DoHorizontal(Active horz)
           {
             IntersectEdges(ae, horz, pt);
             SwapPositionsInAEL(ae, horz);
+            CheckJoinRight(ae, pt);
             horz.curX = ae.curX;
             ae = horz.prevInAEL;
           }
 
-          if (IsHotEdge(horz) && (horz.outrec != currOutrec))
-          {
-            currOutrec = horz.outrec;
+          if (IsHotEdge(horz))
             AddToHorzSegList(GetLastOp(horz));
-          }
 
         } // we've reached the end of this horizontal
 
@@ -2263,7 +2284,7 @@ private void DoHorizontal(Active horz)
           DeleteFromAEL(horz);
           return;
         }
-        else if (NextVertex(horz).pt.Y != horz.top.Y)
+        if (NextVertex(horz).pt.Y != horz.top.Y)
           break;
 
         //still more horizontals in bound to process ...
@@ -2271,9 +2292,6 @@ private void DoHorizontal(Active horz)
           AddOutPt(horz, horz.top);
 
         UpdateEdgeIntoAEL(horz);
-
-        if (PreserveCollinear && !horzIsOpen && HorzIsSpike(horz))
-          TrimHorz(horz, true);
 
         isLeftToRight = ResetHorzDirection(horz,
           vertex_max, out leftX, out rightX);
@@ -2323,30 +2341,26 @@ private void DoHorizontal(Active horz)
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private Active? DoMaxima(Active ae)
     {
-      Active? prevE;
-      Active? nextE, maxPair;
-      prevE = ae.prevInAEL;
-      nextE = ae.nextInAEL;
+      Active? prevE = ae.prevInAEL;
+      Active? nextE = ae.nextInAEL;
 
       if (IsOpenEnd(ae))
       {
         if (IsHotEdge(ae)) AddOutPt(ae, ae.top);
-        if (!IsHorizontal(ae))
+        if (IsHorizontal(ae)) return nextE;
+        if (IsHotEdge(ae))
         {
-          if (IsHotEdge(ae))
-          {
-            if (IsFront(ae))
-              ae.outrec!.frontEdge = null;
-            else
-              ae.outrec!.backEdge = null;
-            ae.outrec = null;
-          }
-          DeleteFromAEL(ae);
+          if (IsFront(ae))
+            ae.outrec!.frontEdge = null;
+          else
+            ae.outrec!.backEdge = null;
+          ae.outrec = null;
         }
+        DeleteFromAEL(ae);
         return nextE;
       }
 
-      maxPair = GetMaximaPair(ae);
+      Active? maxPair = GetMaximaPair(ae);
       if (maxPair == null) return nextE; // eMaxPair is horizontal
 
       if (IsJoined(ae)) Split(ae, ae.top);
@@ -2406,8 +2420,10 @@ private void DoHorizontal(Active horz)
       Point64 pt, bool checkCurrX = false)
     {
       Active? prev = e.prevInAEL;
-      if (prev == null || IsOpen(e) || IsOpen(prev) ||
-        !IsHotEdge(e) || !IsHotEdge(prev)) return;
+      if (prev == null || 
+        !IsHotEdge(e) || !IsHotEdge(prev) || 
+        IsHorizontal(e) || IsHorizontal(prev) ||
+        IsOpen(e) || IsOpen(prev)) return;
       if ((pt.Y < e.top.Y + 2 || pt.Y < prev.top.Y + 2) &&  // avoid trivial joins
         ((e.bot.Y > pt.Y) || (prev.bot.Y > pt.Y))) return;  // (#490)
 
@@ -2416,7 +2432,7 @@ private void DoHorizontal(Active horz)
         if (Clipper.PerpendicDistFromLineSqrd(pt, prev.bot, prev.top) > 0.25) return;
       }
       else if (e.curX != prev.curX) return;
-      if (InternalClipper.CrossProduct(e.top, pt, prev.top) != 0) return;
+      if (!InternalClipper.IsCollinear(e.top, pt, prev.top)) return;
 
       if (e.outrec!.idx == prev.outrec!.idx)
         AddLocalMaxPoly(prev, e, pt);
@@ -2433,8 +2449,10 @@ private void DoHorizontal(Active horz)
       Point64 pt, bool checkCurrX = false)
     {
       Active? next = e.nextInAEL;
-      if (IsOpen(e) || !IsHotEdge(e) || IsJoined(e) ||
-        next == null || IsOpen(next) || !IsHotEdge(next)) return; 
+      if (next == null || 
+        !IsHotEdge(e) || !IsHotEdge(next) || 
+        IsHorizontal(e) || IsHorizontal(next) ||
+        IsOpen(e) || IsOpen(next)) return; 
       if ((pt.Y < e.top.Y + 2 || pt.Y < next.top.Y + 2) &&  // avoid trivial joins
         ((e.bot.Y > pt.Y) || (next.bot.Y > pt.Y)))  return; // (#490)
 
@@ -2443,8 +2461,7 @@ private void DoHorizontal(Active horz)
         if (Clipper.PerpendicDistFromLineSqrd(pt, next.bot, next.top) > 0.25) return;
       }
       else if (e.curX != next.curX) return;
-      if (InternalClipper.CrossProduct(e.top, pt, next.top) != 0)
-          return;
+      if (!InternalClipper.IsCollinear(e.top, pt, next.top)) return;
 
       if (e.outrec!.idx == next.outrec!.idx)
         AddLocalMaxPoly(e, next, pt);
@@ -2462,7 +2479,7 @@ private void DoHorizontal(Active horz)
       OutPt op = outrec.pts!;
       do
       {
-        op!.outrec = outrec;
+        op.outrec = outrec;
         op = op.next!;
       } while (op != outrec.pts);
     }
@@ -2521,9 +2538,9 @@ private void DoHorizontal(Active horz)
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static OutPt DuplicateOp(OutPt op, bool insert_after)
+    private OutPt DuplicateOp(OutPt op, bool insert_after)
     {
-      OutPt result = new OutPt(op.pt, op.outrec);
+      OutPt result = _outPtPool.Add(op.pt, op.outrec);
       if (insert_after)
       {
         result.next = op.next;
@@ -2541,13 +2558,25 @@ private void DoHorizontal(Active horz)
       return result;
     }
 
+    private static int HorzSegSort(HorzSegment? hs1, HorzSegment? hs2)
+    {
+      if (hs1 == null || hs2 == null) return 0;
+      if (hs1.rightOp == null)
+      {
+        return hs2.rightOp == null ? 0 : 1;
+      }
+      if (hs2.rightOp == null)
+        return -1;
+      return hs1.leftOp!.pt.X.CompareTo(hs2.leftOp!.pt.X);
+    }
+
     private void ConvertHorzSegsToJoins()
     {
       int k = 0;
       foreach (HorzSegment hs in _horzSegList)
         if (UpdateHorzSegment(hs)) k++;
       if (k < 2) return;
-      _horzSegList.Sort(new HorzSegSorter());
+      _horzSegList.Sort(HorzSegSort);
 
       for (int i = 0; i < k -1; i++)
       {
@@ -2568,10 +2597,9 @@ private void DoHorizontal(Active horz)
             while (hs2.leftOp.prev.pt.Y == curr_y &&
               hs2.leftOp.prev.pt.X <= hs1.leftOp.pt.X)
               (hs2).leftOp = (hs2).leftOp.prev;
-            HorzJoin join = new HorzJoin(
+            HorzJoin join = _horzJoinList.Add(
               DuplicateOp((hs1).leftOp, true),
               DuplicateOp((hs2).leftOp, false));
-            _horzJoinList.Add(join);
           }
           else
           {
@@ -2581,30 +2609,39 @@ private void DoHorizontal(Active horz)
             while (hs2.leftOp.next!.pt.Y == curr_y &&
               hs2.leftOp.next.pt.X <= (hs1).leftOp.pt.X)
               hs2.leftOp = (hs2).leftOp.next;
-            HorzJoin join = new HorzJoin(
+            HorzJoin join = _horzJoinList.Add(
               DuplicateOp((hs2).leftOp, true),
               DuplicateOp((hs1).leftOp, false));
-            _horzJoinList.Add(join);
           }
         }
       } 
     }
 
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Rect64 GetBounds(OutPt op)
+    private static Path64 GetCleanPath(OutPt op)
     {
-      Rect64 result = new Rect64(op.pt.X, op.pt.Y, op.pt.X, op.pt.Y);
-      OutPt op2 = op.next!;
+      Path64 result = new Path64();
+      OutPt op2 = op;
+      while (op2.next != op &&
+        ((op2.pt.X == op2.next!.pt.X && op2.pt.X == op2.prev.pt.X) ||
+          (op2.pt.Y == op2.next.pt.Y && op2.pt.Y == op2.prev.pt.Y))) op2 = op2.next;
+      result.Add(op2.pt);
+      OutPt prevOp = op2;
+      op2 = op2.next;
       while (op2 != op)
       {
-        if (op2.pt.X < result.left) result.left = op2.pt.X;
-        else if (op2.pt.X > result.right) result.right = op2.pt.X;
-        if (op2.pt.Y < result.top) result.top = op2.pt.Y;
-        else if (op2.pt.Y > result.bottom) result.bottom = op2.pt.Y;
-        op2 = op2.next!;
+        if ((op2.pt.X != op2.next!.pt.X || op2.pt.X != prevOp.pt.X) &&
+          (op2.pt.Y != op2.next.pt.Y || op2.pt.Y != prevOp.pt.Y))
+        {
+          result.Add(op2.pt);
+          prevOp = op2;
+        }
+        op2 = op2.next;
       }
       return result;
     }
+
 
     private static PointInPolygonResult PointInOpPolygon(Point64 pt, OutPt op)
     {
@@ -2633,7 +2670,7 @@ private void DoHorizontal(Active horz)
           while (op2 != op && op2.pt.Y > pt.Y) op2 = op2.next!;
         if (op2 == op) break;
 
-        // must have touched or crossed the pt.Y horizonal
+        // must have touched or crossed the pt.Y horizontal
         // and this must happen an even number of times
 
         if (op2.pt.Y == pt.Y) // touching the horizontal
@@ -2652,7 +2689,7 @@ private void DoHorizontal(Active horz)
             val = 1 - val; // toggle val
           else
           {
-            double d = InternalClipper.CrossProduct(op2.prev.pt, op2.pt, pt);
+            int d = InternalClipper.CrossProductSign(op2.prev.pt, op2.pt, pt);
             if (d == 0) return PointInPolygonResult.IsOn;
             if ((d < 0) == isAbove) val = 1 - val;
           } 
@@ -2661,34 +2698,50 @@ private void DoHorizontal(Active horz)
         op2 = op2.next!;
       }
 
-      if (isAbove != startingAbove)
+      if (isAbove == startingAbove) return val == 0 ? PointInPolygonResult.IsOutside : PointInPolygonResult.IsInside;
       {
-        double d = InternalClipper.CrossProduct(op2.prev.pt, op2.pt, pt);
+        int d = InternalClipper.CrossProductSign(op2.prev.pt, op2.pt, pt);
         if (d == 0) return PointInPolygonResult.IsOn;
         if ((d < 0) == isAbove) val = 1 - val;
       }
 
-      if (val == 0) return PointInPolygonResult.IsOutside;
-      else return PointInPolygonResult.IsInside;
+      return val == 0 ? PointInPolygonResult.IsOutside : PointInPolygonResult.IsInside;
     }
 
     private static bool Path1InsidePath2(OutPt op1, OutPt op2)
     {
       // we need to make some accommodation for rounding errors
       // so we won't jump if the first vertex is found outside
-      int outside_cnt = 0;
+      PointInPolygonResult pip = PointInPolygonResult.IsOn;
       OutPt op = op1;
       do
       {
-        PointInPolygonResult result = PointInOpPolygon(op.pt, op2);
-        if (result == PointInPolygonResult.IsOutside) ++outside_cnt;
-        else if (result == PointInPolygonResult.IsInside) --outside_cnt;
+        switch (PointInOpPolygon(op.pt, op2))
+        {
+          case PointInPolygonResult.IsOutside:
+            if (pip == PointInPolygonResult.IsOutside) return false;
+            pip = PointInPolygonResult.IsOutside;
+            break;
+          case PointInPolygonResult.IsInside:
+            if (pip == PointInPolygonResult.IsInside) return true;
+            pip = PointInPolygonResult.IsInside;
+            break;
+          default: break;
+        }
         op = op.next!;
-      } while (op != op1 && Math.Abs(outside_cnt) < 2);
-      if (Math.Abs(outside_cnt) > 1) return (outside_cnt < 0);
-      // since path1's location is still equivocal, check its midpoint
-      Point64 mp = GetBounds(op).MidPoint();
-      return PointInOpPolygon(mp, op2) == PointInPolygonResult.IsInside;
+      } while (op != op1);
+      // result is unclear, so try again using cleaned paths
+      return InternalClipper.Path2ContainsPath1(GetCleanPath(op1), GetCleanPath(op2)); // (#973)
+    }
+
+    private static void MoveSplits(OutRec fromOr, OutRec toOr)
+    {
+      if (fromOr.splits == null) return;
+      toOr.splits ??= new List<int>();
+      foreach (int i in fromOr.splits)
+        if (i != toOr.idx)
+          toOr.splits.Add(i);
+      fromOr.splits = null;
     }
 
     private void ProcessHorzJoins()
@@ -2699,7 +2752,7 @@ private void DoHorizontal(Active horz)
         OutRec or2 = GetRealOutRec(j.op2!.outrec)!;
 
         OutPt op1b = j.op1.next!;
-        OutPt op2b = j.op2.prev!;
+        OutPt op2b = j.op2.prev;
         j.op1.next = j.op2;
         j.op2.prev = j.op1;
         op1b.prev = op2b;
@@ -2709,27 +2762,33 @@ private void DoHorizontal(Active horz)
         {
           or2 = NewOutRec();
           or2.pts = op1b;
-
           FixOutRecPts(or2);
+
+          //if or1->pts has moved to or2 then update or1->pts!!
           if (or1.pts!.outrec == or2)
           {
             or1.pts = j.op1;
             or1.pts.outrec = or1;
           }
 
-          if (_using_polytree)  //#498, #520, #584, D#576
+          if (_using_polytree)  //#498, #520, #584, D#576, #618
           {
             if (Path1InsidePath2(or1.pts, or2.pts))
             {
-              or2.owner = or1.owner;
-              SetOwner(or1, or2);
+              //swap or1's & or2's pts
+              (or2.pts, or1.pts) = (or1.pts, or2.pts);
+              FixOutRecPts(or1);
+              FixOutRecPts(or2);
+              //or2 is now inside or1
+              or2.owner = or1;
             }
+            else if (Path1InsidePath2(or2.pts, or1.pts))
+              or2.owner = or1;
             else
-            {
-              SetOwner(or2, or1);
-              or1.splits ??= new List<int>();
-              or1.splits.Add(or2.idx); 
-            }
+              or2.owner = or1.owner;
+
+            or1.splits ??= new List<int>();
+            or1.splits.Add(or2.idx);
           }
           else
             or2.owner = or1;
@@ -2738,7 +2797,10 @@ private void DoHorizontal(Active horz)
         {
           or2.pts = null;
           if (_using_polytree)
+          {
             SetOwner(or2, or1);
+            MoveSplits(or2, or1); //#618
+          }
           else
             or2.owner = or1;
         }
@@ -2797,7 +2859,7 @@ private void DoHorizontal(Active horz)
       for (; ; )
       {
         // NB if preserveCollinear == true, then only remove 180 deg. spikes
-        if ((InternalClipper.CrossProduct(op2!.prev.pt, op2.pt, op2.next!.pt) == 0) &&
+        if ((InternalClipper.IsCollinear(op2!.prev.pt, op2.pt, op2.next!.pt)) &&
           ((op2.pt == op2.prev.pt) || (op2.pt == op2.next.pt) || !PreserveCollinear ||
           (InternalClipper.DotProduct(op2.prev.pt, op2.pt, op2.next.pt) < 0)))
         {
@@ -2826,9 +2888,8 @@ private void DoHorizontal(Active horz)
       OutPt prevOp = splitOp.prev;
       OutPt nextNextOp = splitOp.next!.next!;
       outrec.pts = prevOp;
-      OutPt result = prevOp;
 
-      InternalClipper.GetIntersectPoint(
+      InternalClipper.GetLineIntersectPt(
           prevOp.pt, splitOp.pt, splitOp.next.pt, nextNextOp.pt, out Point64 ip);
 
 #if USINGZ
@@ -2857,7 +2918,9 @@ private void DoHorizontal(Active horz)
       }
       else
       {
-        OutPt newOp2 = new OutPt(ip, outrec) { prev = prevOp, next = nextNextOp };        
+        OutPt newOp2 = _outPtPool.Add(ip, outrec);
+        newOp2.prev = prevOp;
+        newOp2.next = nextNextOp;
         nextNextOp.prev = newOp2;
         prevOp.next = newOp2;
       }
@@ -2867,33 +2930,31 @@ private void DoHorizontal(Active horz)
       // So the only way for these areas to have the same sign is if
       // the split triangle is larger than the path containing prevOp or
       // if there's more than one self=intersection.
-      if (absArea2 > 1 &&
-          (absArea2 > absArea1 ||
-           ((area2 > 0) == (area1 > 0))))
+      if (!(absArea2 > 1) ||
+          (!(absArea2 > absArea1) &&
+           ((area2 > 0) != (area1 > 0)))) return;
+      OutRec newOutRec = NewOutRec();
+      newOutRec.owner = outrec.owner;
+      splitOp.outrec = newOutRec;
+      splitOp.next.outrec = newOutRec;
+
+      OutPt newOp = _outPtPool.Add(ip, newOutRec);
+      newOp.prev = splitOp.next;
+      newOp.next = splitOp;
+      newOutRec.pts = newOp;
+      splitOp.prev = newOp;
+      splitOp.next.next = newOp;
+
+      if (!_using_polytree) return;
+      if (Path1InsidePath2(prevOp, newOp))
       {
-        OutRec newOutRec = NewOutRec();
-        newOutRec.owner = outrec.owner;
-        splitOp.outrec = newOutRec;
-        splitOp.next.outrec = newOutRec;
-
-        OutPt newOp = new OutPt(ip, newOutRec) { prev = splitOp.next, next = splitOp };
-        newOutRec.pts = newOp;
-        splitOp.prev = newOp;
-        splitOp.next.next = newOp;
-
-        if (_using_polytree)
-        {
-          if (Path1InsidePath2(prevOp, newOp))
-          {
-            newOutRec.splits ??= new List<int>();
-            newOutRec.splits.Add(outrec.idx);
-          }
-          else
-          {
-            outrec.splits ??= new List<int>();
-            outrec.splits.Add(newOutRec.idx);
-          }
-        }
+        newOutRec.splits ??= new List<int>();
+        newOutRec.splits.Add(outrec.idx);
+      }
+      else
+      {
+        outrec.splits ??= new List<int>();
+        outrec.splits.Add(newOutRec.idx);
       }
       //else { splitOp = null; splitOp.next = null; }
     }
@@ -2902,20 +2963,35 @@ private void DoHorizontal(Active horz)
     private void FixSelfIntersects(OutRec outrec)
     {
       OutPt op2 = outrec.pts!;
+      if (op2.prev == op2.next!.next)
+        return; // because triangles can't self-intersect
       for (; ; )
       {
-        // triangles can't self-intersect
-        if (op2.prev == op2.next!.next) break;
-        if (InternalClipper.SegsIntersect(op2.prev.pt,
-                op2.pt, op2.next.pt, op2.next.next!.pt))
+        if (InternalClipper.SegsIntersect(op2!.prev.pt,
+                op2.pt, op2.next!.pt, op2.next.next!.pt))
         {
-          DoSplitOp(outrec, op2);
-          if (outrec.pts == null) return;
-          op2 = outrec.pts;
-          continue;
+          if (InternalClipper.SegsIntersect(op2.prev.pt,
+                  op2.pt, op2.next.next!.pt, op2.next.next.next!.pt))
+          {
+            // adjacent intersections (ie a micro self-intersection)
+            op2 = DuplicateOp(op2, false);
+            op2.pt = op2.next!.next!.next!.pt;
+            op2 = op2.next;
+          }
+          else
+          {
+            if (op2 == outrec.pts || op2.next == outrec.pts)
+              outrec.pts = outrec.pts.prev;
+            DoSplitOp(outrec, op2);
+            if (outrec.pts == null) return;
+            op2 = outrec.pts;
+            // triangles can't self-intersect
+            if (op2.prev == op2.next!.next) break;
+            continue;
+          }
         }
-        else
-          op2 = op2.next;
+
+        op2 = op2.next!;
         if (op2 == outrec.pts) break;
       }
     }
@@ -2953,16 +3029,15 @@ private void DoHorizontal(Active horz)
           op2 = op2.next!;
       }
 
-      if (path.Count == 3 && IsVerySmallTriangle(op2)) return false;
-      else return true;
+      return path.Count != 3 || isOpen || !IsVerySmallTriangle(op2);
     }
 
     protected bool BuildPaths(Paths64 solutionClosed, Paths64 solutionOpen)
     {
       solutionClosed.Clear();
       solutionOpen.Clear();
-      solutionClosed.Capacity = _outrecList.Count;
-      solutionOpen.Capacity = _outrecList.Count;
+      solutionClosed.EnsureCapacity(_outrecList.Count);
+      solutionOpen.EnsureCapacity(_outrecList.Count);
       
       int i = 0;
       // _outrecList.Count is not static here because
@@ -2972,7 +3047,7 @@ private void DoHorizontal(Active horz)
         OutRec outrec = _outrecList[i++];
         if (outrec.pts == null) continue;
 
-        Path64 path = new Path64();
+        Path64 path = new Path64(outrec.outPtCount);
         if (outrec.isOpen)
         {
           if (BuildPath(outrec.pts, ReverseSolution, true, path))
@@ -2991,21 +3066,6 @@ private void DoHorizontal(Active horz)
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Rect64 GetBounds(Path64 path)
-	  {
-		  if (path.Count == 0) return new Rect64();
-      Rect64 result = Clipper.InvalidRect64;
-		  foreach (Point64 pt in path)
-		  {
-			  if (pt.X < result.left) result.left = pt.X;
-			  if (pt.X > result.right) result.right = pt.X;
-			  if (pt.Y < result.top) result.top = pt.Y;
-			  if (pt.Y > result.bottom) result.bottom = pt.Y;
-		  }
-		  return result;
-	  }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool CheckBounds(OutRec outrec)
     {
       if (outrec.pts == null) return false;
@@ -3014,23 +3074,33 @@ private void DoHorizontal(Active horz)
       if (outrec.pts == null ||
         !BuildPath(outrec.pts, ReverseSolution, false, outrec.path))
           return false;
-      outrec.bounds = GetBounds(outrec.path);
+      outrec.bounds = InternalClipper.GetBounds(outrec.path);
       return true;
     }
 
     private bool CheckSplitOwner(OutRec outrec, List<int>? splits)
     {
-      foreach (int i in splits!)
+      // nb: use indexing (not an iterator) in case 'splits' is modified inside this loop (#1029)
+      for (int i = 0; i < splits!.Count; i++)
       {
-        OutRec? split = GetRealOutRec(_outrecList[i]);
-        if (split == null || split == outrec || split == outrec.owner) continue;
-        if (split!.splits != null && CheckSplitOwner(outrec, split.splits)) return true;
-        if (CheckBounds(split) && split.bounds.Contains(outrec.bounds) &&
-            Path1InsidePath2(outrec.pts!, split.pts!))
-        {
-          outrec.owner = split; //found in split
-          return true;
-        }
+        OutRec? split = _outrecList[splits[i]];
+        if (split.pts == null && split.splits != null &&
+          CheckSplitOwner(outrec, split.splits)) return true; //#942
+        split = GetRealOutRec(split);
+        if (split == null || split == outrec || split.recursiveSplit == outrec) continue;
+        split.recursiveSplit = outrec; //#599
+        
+        if (split.splits != null && CheckSplitOwner(outrec, split.splits)) return true;
+
+        if (!CheckBounds(split) ||
+            !split.bounds.Contains(outrec.bounds) ||
+            !Path1InsidePath2(outrec.pts!, split.pts!)) continue;
+
+        if (!IsValidOwner(outrec, split)) // split is owned by outrec (#957)
+          split.owner = outrec.owner;
+
+        outrec.owner = split; //found in split
+        return true;
       }
       return false;
     }
@@ -3045,7 +3115,7 @@ private void DoHorizontal(Active horz)
       {
         if (outrec.owner.splits != null && 
           CheckSplitOwner(outrec, outrec.owner.splits)) break; 
-        else if (outrec.owner.pts != null && CheckBounds(outrec.owner) &&
+        if (outrec.owner.pts != null && CheckBounds(outrec.owner) &&
           Path1InsidePath2(outrec.pts!, outrec.owner.pts!)) break;
         outrec.owner = outrec.owner.owner;
       }
@@ -3065,7 +3135,7 @@ private void DoHorizontal(Active horz)
       polytree.Clear();
       solutionOpen.Clear();
       if (_hasOpenPaths)
-        solutionOpen.Capacity = _outrecList.Count;
+        solutionOpen.EnsureCapacity(_outrecList.Count);
 
       int i = 0;
       // _outrecList.Count is not static here because
@@ -3078,7 +3148,7 @@ private void DoHorizontal(Active horz)
 
         if (outrec.isOpen)
         {
-          Path64 open_path = new Path64();
+          Path64 open_path = new Path64(outrec.outPtCount);
           if (BuildPath(outrec.pts, ReverseSolution, true, open_path))
             solutionOpen.Add(open_path);
           continue;
@@ -3210,7 +3280,7 @@ private void DoHorizontal(Active horz)
 
   public class ClipperD : ClipperBase
   {
-    private readonly string precision_range_error = "Error: Precision is out of range.";
+    private const string precision_range_error = "Error: Precision is out of range.";
 
     private readonly double _scale;
     private readonly double _invScale;
@@ -3330,10 +3400,10 @@ private void DoHorizontal(Active horz)
       ClearSolutionOnly();
       if (!success) return false;
 
-      solutionClosed.Capacity = solClosed64.Count;
+      solutionClosed.EnsureCapacity(solClosed64.Count);
       foreach (Path64 path in solClosed64)
         solutionClosed.Add(Clipper.ScalePathD(path, _invScale));
-      solutionOpen.Capacity = solOpen64.Count;
+      solutionOpen.EnsureCapacity(solOpen64.Count);
       foreach (Path64 path in solOpen64)
         solutionOpen.Add(Clipper.ScalePathD(path, _invScale));
 
@@ -3368,12 +3438,10 @@ private void DoHorizontal(Active horz)
       }
       ClearSolutionOnly();
       if (!success) return false;
-      if (oPaths.Count > 0)
-      {
-        openPaths.Capacity = oPaths.Count;        
-        foreach (Path64 path in oPaths)
-          openPaths.Add(Clipper.ScalePathD(path, _invScale));
-      }
+      if (oPaths.Count <= 0) return true;
+      openPaths.EnsureCapacity(oPaths.Count);
+      foreach (Path64 path in oPaths)
+        openPaths.Add(Clipper.ScalePathD(path, _invScale));
 
       return true;
     }
@@ -3428,7 +3496,7 @@ private void DoHorizontal(Active horz)
         }
       }
 
-    };
+    }
 
     public bool IsHole => GetIsHole();
 
@@ -3453,23 +3521,52 @@ private void DoHorizontal(Active horz)
     }
 
     public int Count => _childs.Count;
-    internal abstract PolyPathBase AddChild(Path64 p);
+    public abstract PolyPathBase AddChild(Path64 p);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Clear()
     {
       _childs.Clear();
     }
-  } // PolyPathBase class
 
-  public class PolyPath64 : PolyPathBase
+    internal string ToStringInternal(int idx, int level)
+    {
+      string result = "", padding = "", plural = "s";
+      if (_childs.Count == 1) plural = "";
+      padding = padding.PadLeft(level * 2);
+      if ((level & 1) == 0)
+        result += $"{padding}+- hole ({idx}) contains {_childs.Count} nested polygon{plural}.\n";
+      else
+        result += $"{padding}+- polygon ({idx}) contains {_childs.Count} hole{plural}.\n";
+
+      for (int i = 0; i < Count; i++)
+        if (_childs[i].Count > 0)
+          result += _childs[i].ToStringInternal(i, level +1);
+      return result;
+    }
+
+    public override string ToString()
+    {
+      if (Level > 0) return ""; //only accept tree root 
+      string plural = "s";
+      if (_childs.Count == 1) plural = "";
+      string result = $"Polytree with {_childs.Count} polygon{plural}.\n";
+      for (int i = 0; i < Count; i++)
+        if (_childs[i].Count > 0)
+          result += _childs[i].ToStringInternal(i, 1);
+      return result + '\n';
+    }
+
+} // PolyPathBase class
+
+public class PolyPath64 : PolyPathBase
   {
     public Path64? Polygon { get; private set; } // polytree root's polygon == null
 
     public PolyPath64(PolyPathBase? parent = null) : base(parent) {}
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal override PolyPathBase AddChild(Path64 p)
+    public override PolyPathBase AddChild(Path64 p)
     {
       PolyPathBase newChild = new PolyPath64(this);
       (newChild as PolyPath64)!.Polygon = p;
@@ -3507,7 +3604,6 @@ private void DoHorizontal(Active horz)
       return result;
     }
   }
-
   public class PolyPathD : PolyPathBase
   {
     internal double Scale { get; set; }
@@ -3516,11 +3612,21 @@ private void DoHorizontal(Active horz)
     public PolyPathD(PolyPathBase? parent = null) : base(parent) {}
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal override PolyPathBase AddChild(Path64 p)
+    public override PolyPathBase AddChild(Path64 p)
     {
       PolyPathBase newChild = new PolyPathD(this);
       (newChild as PolyPathD)!.Scale = Scale;
       (newChild as PolyPathD)!.Polygon = Clipper.ScalePathD(p, 1 / Scale);
+      _childs.Add(newChild);
+      return newChild;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PolyPathBase AddChild(PathD p)
+    {
+      PolyPathBase newChild = new PolyPathD(this);
+      (newChild as PolyPathD)!.Scale = Scale;
+      (newChild as PolyPathD)!.Polygon = p;
       _childs.Add(newChild);
       return newChild;
     }
