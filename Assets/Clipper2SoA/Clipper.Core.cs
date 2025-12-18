@@ -67,14 +67,14 @@ namespace Clipper2SoA
     }
 
     //Note: all clipping operations except for Difference are commutative.
-    //public enum ClipType
-    //{
-    //    None,
-    //    Intersection,
-    //    Union,
-    //    Difference,
-    //    Xor
-    //};
+    public enum ClipType
+    {
+        NoClip,
+        Intersection,
+        Union,
+        Difference,
+        Xor
+    };
 
     public enum PathType
     {

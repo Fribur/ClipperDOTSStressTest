@@ -9,8 +9,6 @@
 * License   :  https://www.boost.org/LICENSE_1_0.txt                           *
 *******************************************************************************/
 
-using Chart3D.MathExtensions;
-using Chart3D.MinHeap;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -18,6 +16,8 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
+using Chart3D.MathExtensions;
+using Chart3D.MinHeap;
 
 namespace Clipper2AoS
 {
@@ -90,8 +90,10 @@ namespace Clipper2AoS
             _isCreated = true;
 
             //input lists
-            _vertexList = new NativeList<Vertex>(1024, allocator);
-            _minimaList = new NativeList<LocalMinima>(1024, allocator);
+            //_vertexList = new NativeList<Vertex>(1024, allocator);
+            //_minimaList = new NativeList<LocalMinima>(1024, allocator);
+            _vertexList = new NativeList<Vertex>(16, allocator);
+            _minimaList = new NativeList<LocalMinima>(16, allocator);
 
             //solution lists
             _activesList = new NativeList<Active>(128, allocator);
@@ -214,7 +216,7 @@ namespace Clipper2AoS
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private long TopX(ref Active ae, long currentY)
         {
-            if ((currentY == ae.top.y) || (ae.top.x == ae.bot.x)) return ae.top.x;
+            if (currentY == ae.top.y || ae.top.x == ae.bot.x) return ae.top.x;
             if (currentY == ae.bot.y) return ae.bot.x;
 
             // use MidpointRounding.ToEven in order to explicitly match the nearbyint behaviour on the C++ side
@@ -309,8 +311,8 @@ namespace Clipper2AoS
             if (ae.windDx > 0)
             {
                 while (_vertexList.ElementAt(result.next).pt.y == result.pt.y &&
-                  ((result.flags & (VertexFlags.OpenEnd |
-                  VertexFlags.LocalMax)) == VertexFlags.None))
+                  (result.flags & (VertexFlags.OpenEnd |
+                  VertexFlags.LocalMax)) == VertexFlags.None)
                 {
                     resultID = result.next;
                     result = ref _vertexList.ElementAt(resultID);
@@ -319,8 +321,8 @@ namespace Clipper2AoS
             else
             {
                 while (_vertexList.ElementAt(result.prev).pt.y == result.pt.y &&
-                  ((result.flags & (VertexFlags.OpenEnd |
-                  VertexFlags.LocalMax)) == VertexFlags.None))
+                  (result.flags & (VertexFlags.OpenEnd |
+                  VertexFlags.LocalMax)) == VertexFlags.None)
                 {
                     resultID = result.prev;
                     result = ref _vertexList.ElementAt(resultID);
@@ -360,9 +362,9 @@ namespace Clipper2AoS
         {
             public readonly int Compare(IntersectNode a, IntersectNode b)
             {
-                if (a.pt.y != b.pt.y) return (a.pt.y > b.pt.y) ? -1 : 1;
+                if (a.pt.y != b.pt.y) return a.pt.y > b.pt.y ? -1 : 1;
                 if (a.pt.x == b.pt.x) return 0;
-                return (a.pt.x < b.pt.x) ? -1 : 1;
+                return a.pt.x < b.pt.x ? -1 : 1;
             }
         }
 
@@ -471,7 +473,7 @@ namespace Clipper2AoS
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsValidOwner(int outRecID, int testOwnerID)
         {
-            while ((testOwnerID != -1) && (testOwnerID != outRecID))
+            while (testOwnerID != -1 && testOwnerID != outRecID)
                 testOwnerID = _outrecList[testOwnerID].owner;
             return testOwnerID == -1;
         }
@@ -508,7 +510,7 @@ namespace Clipper2AoS
         private bool EdgesAdjacentInAEL(IntersectNode inode)
         {
             ref var inodeEdge1 = ref _activesList.ElementAt(inode.edge1);
-            return (inodeEdge1.nextInAEL == inode.edge2) || (inodeEdge1.prevInAEL == inode.edge2);
+            return inodeEdge1.nextInAEL == inode.edge2 || inodeEdge1.prevInAEL == inode.edge2;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -589,7 +591,7 @@ namespace Clipper2AoS
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool HasLocMinAtY(long y)
         {
-            return (_currentLocMin < _minimaList.Length && _vertexList[_minimaList[_currentLocMin].vertex].pt.y == y);
+            return _currentLocMin < _minimaList.Length && _vertexList[_minimaList[_currentLocMin].vertex].pt.y == y;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -635,8 +637,11 @@ namespace Clipper2AoS
                     prev_vID = _vertexList.AddVertex(pt, VertexFlags.None, false, v0ID);
             }
             ref var v0 = ref _vertexList.ElementAt(v0ID);
+            
+            if (prev_vID == -1) return;
             ref var prev_v = ref _vertexList.ElementAt(prev_vID);
-            if (prev_vID == -1 || prev_v.prev == -1) return;
+            if (prev_v.prev == -1)
+                return;
             //the following eliminates the end point (identical with start) for closed polygons from the linked list
             if (!isOpen && prev_v.pt == v0.pt) prev_v = ref _vertexList.ElementAt(prev_vID = prev_v.prev);
             prev_v.next = v0ID; //link tail to head
@@ -705,25 +710,16 @@ namespace Clipper2AoS
                 else prev_v.flags |= VertexFlags.LocalMax;
             }
         }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddSubject(ref PolygonInt paths)
-        {
-            AddPaths(ref paths, PathType.Subject);
-        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddSubject(NativeArray<int2> nodes, NativeArray<int> startIDs)
         {
             AddPaths(nodes, startIDs, PathType.Subject);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddOpenSubject(ref PolygonInt paths)
+        public void AddOpenSubject(NativeArray<int2> nodes, NativeArray<int> startIDs)
         {
-            AddPaths(ref paths, PathType.Subject, true);
-        }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddClip(ref PolygonInt paths)
-        {
-            AddPaths(ref paths, PathType.Clip);
+            AddPaths(nodes, startIDs, PathType.Subject, true);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddClip(NativeArray<int2> nodes, NativeArray<int> startIDs)
@@ -737,21 +733,13 @@ namespace Clipper2AoS
             _isSortedMinimaList = false;
             _vertexList.EnsureCapacity(_vertexList.Length + (end - start));
             AddPathToVertexList(nodes, start, end, polytype, isOpen);
-        }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddPaths(ref PolygonInt path, PathType polytype, bool isOpen = false)
-        {
-            if (isOpen) _hasOpenPaths = true;
-            _isSortedMinimaList = false;
-            _vertexList.EnsureCapacity(_vertexList.Length + (path.nodes.Length));
-            AddPathsToVertexList(path.nodes.AsArray(), path.startIDs.AsArray(), polytype, isOpen);
-        }
+        }        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddPaths(NativeArray<int2> nodes, NativeArray<int> startIDs, PathType polytype, bool isOpen = false)
         {
             if (isOpen) _hasOpenPaths = true;
             _isSortedMinimaList = false;
-            _vertexList.EnsureCapacity(_vertexList.Length + (nodes.Length));
+            _vertexList.EnsureCapacity(_vertexList.Length + nodes.Length);
             AddPathsToVertexList(nodes, startIDs, polytype, isOpen);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -791,11 +779,11 @@ namespace Clipper2AoS
                 case ClipType.Difference:
                     bool result = _fillrule switch
                     {
-                        FillRule.Positive => (ae.windCount2 <= 0),
-                        FillRule.Negative => (ae.windCount2 >= 0),
+                        FillRule.Positive => ae.windCount2 <= 0,
+                        FillRule.Negative => ae.windCount2 >= 0,
                         _ => ae.windCount2 == 0
                     };
-                    return (GetPolyType(ref ae) == PathType.Subject) ? result : !result;
+                    return GetPolyType(ref ae) == PathType.Subject ? result : !result;
 
                 case ClipType.Xor:
                     return true; // XOr is always contributing unless open
@@ -891,7 +879,7 @@ namespace Clipper2AoS
                         }
                         else
                             // now outside all polys of same polytype so set own WC ...
-                            ae.windCount = (IsOpen(ref ae) ? 1 : ae.windDx);
+                            ae.windCount = IsOpen(ref ae) ? 1 : ae.windDx;
                     }
                     else
                     {
@@ -917,7 +905,7 @@ namespace Clipper2AoS
                 {
                     ref var ae2 = ref _activesList.ElementAt(ae2ID);
                     if (GetPolyType(ref ae2) != pt && !IsOpen(ref ae2))
-                        ae.windCount2 = (ae.windCount2 == 0 ? 1 : 0);
+                        ae.windCount2 = ae.windCount2 == 0 ? 1 : 0;
                     ae2ID = ae2.nextInAEL;
                 }
             }
@@ -951,8 +939,8 @@ namespace Clipper2AoS
                     ae2ID = ae2.nextInAEL;
                 }
 
-                ae.windCount = (IsOdd(cnt1) ? 1 : 0);
-                ae.windCount2 = (IsOdd(cnt2) ? 1 : 0);
+                ae.windCount = IsOdd(cnt1) ? 1 : 0;
+                ae.windCount2 = IsOdd(cnt2) ? 1 : 0;
             }
             else
             {
@@ -976,19 +964,19 @@ namespace Clipper2AoS
 
             // get the turning direction  a1.top, a2.bot, a2.top
             int d = InternalClipper.CrossProductSign(resident.top, newcomer.bot, newcomer.top);
-            if (d != 0) return (d < 0);
+            if (d != 0) return d < 0;
 
             // edges must be collinear to get here
 
             // for starting open paths, place them according to
             // the direction they're about to turn
-            if (!IsMaxima(ref resident) && (resident.top.y > newcomer.top.y))
+            if (!IsMaxima(ref resident) && resident.top.y > newcomer.top.y)
             {
                 return InternalClipper.CrossProductSign(newcomer.bot,
                   resident.top, _vertexList.ElementAt(NextVertex(ref resident)).pt) <= 0;
             }
 
-            if (!IsMaxima(ref newcomer) && (newcomer.top.y > resident.top.y))
+            if (!IsMaxima(ref newcomer) && newcomer.top.y > resident.top.y)
             {
                 return InternalClipper.CrossProductSign(newcomer.bot,
                   newcomer.top, _vertexList.ElementAt(NextVertex(ref newcomer)).pt) >= 0;
@@ -1005,8 +993,8 @@ namespace Clipper2AoS
             if (InternalClipper.IsCollinear(PrevPrevVertex(ref resident),
                 resident.bot, resident.top)) return true;
             // compare turning direction of the alternate bound
-            return (InternalClipper.CrossProductSign(PrevPrevVertex(ref resident),
-              newcomer.bot, PrevPrevVertex(ref newcomer)) > 0) == newcomerIsLeft;
+            return InternalClipper.CrossProductSign(PrevPrevVertex(ref resident),
+              newcomer.bot, PrevPrevVertex(ref newcomer)) > 0 == newcomerIsLeft;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1384,9 +1372,9 @@ namespace Clipper2AoS
 
             switch (toFront)
             {
-                case true when (pt == opFront.pt):
+                case true when pt == opFront.pt:
                     return opFrontID;
-                case false when (pt == opBack.pt):
+                case false when pt == opBack.pt:
                     return opBackID;
             }
 
@@ -1607,11 +1595,11 @@ namespace Clipper2AoS
                 if (_fillrule != FillRule.EvenOdd)
                     ae1.windCount2 += ae2.windDx;
                 else
-                    ae1.windCount2 = (ae1.windCount2 == 0 ? 1 : 0);
+                    ae1.windCount2 = ae1.windCount2 == 0 ? 1 : 0;
                 if (_fillrule != FillRule.EvenOdd)
                     ae2.windCount2 -= ae1.windDx;
                 else
-                    ae2.windCount2 = (ae2.windCount2 == 0 ? 1 : 0);
+                    ae2.windCount2 = ae2.windCount2 == 0 ? 1 : 0;
             }
 
             switch (_fillrule)
@@ -1633,20 +1621,20 @@ namespace Clipper2AoS
             bool e1WindCountIs0or1 = oldE1WindCount == 0 || oldE1WindCount == 1;
             bool e2WindCountIs0or1 = oldE2WindCount == 0 || oldE2WindCount == 1;
 
-            if ((!IsHotEdge(ref ae1) && !e1WindCountIs0or1) || 
-                (!IsHotEdge(ref ae2) && !e2WindCountIs0or1)) return;
+            if (!IsHotEdge(ref ae1) && !e1WindCountIs0or1 || 
+                !IsHotEdge(ref ae2) && !e2WindCountIs0or1) return;
 
             // NOW PROCESS THE INTERSECTION ...
 
             // if both edges are 'hot' ...
             if (IsHotEdge(ref ae1) && IsHotEdge(ref ae2))
             {
-                if ((oldE1WindCount != 0 && oldE1WindCount != 1) || (oldE2WindCount != 0 && oldE2WindCount != 1) ||
-                    (ae1.localMin.polytype != ae2.localMin.polytype && _cliptype != ClipType.Xor))
+                if (oldE1WindCount != 0 && oldE1WindCount != 1 || oldE2WindCount != 0 && oldE2WindCount != 1 ||
+                    ae1.localMin.polytype != ae2.localMin.polytype && _cliptype != ClipType.Xor)
                 {
                     resultOp = AddLocalMaxPoly(ref ae1, ae1ID, ref ae2, ae2ID, pt);
                 }
-                else if (IsFront(ref ae1, ae1ID) || (ae1.outrec == ae2.outrec))
+                else if (IsFront(ref ae1, ae1ID) || ae1.outrec == ae2.outrec)
                 {
                     // this 'else if' condition isn't strictly needed but
                     // it's sensible to split polygons that ony touch at
@@ -1711,8 +1699,8 @@ namespace Clipper2AoS
                             break;
 
                         case ClipType.Difference:
-                            if (((GetPolyType(ref ae1) == PathType.Clip) && (e1Wc2 > 0) && (e2Wc2 > 0)) ||
-                                ((GetPolyType(ref ae1) == PathType.Subject) && (e1Wc2 <= 0) && (e2Wc2 <= 0)))
+                            if (GetPolyType(ref ae1) == PathType.Clip && e1Wc2 > 0 && e2Wc2 > 0 ||
+                                GetPolyType(ref ae1) == PathType.Subject && e1Wc2 <= 0 && e2Wc2 <= 0)
                             {
                                 resultOp = AddLocalMinPoly(ref ae1, ae1ID, ref ae2, ae2ID, pt);
                             }
@@ -1739,7 +1727,7 @@ namespace Clipper2AoS
         {
             int prevID = ae.prevInAEL;
             int nextID = ae.nextInAEL;
-            if (prevID == -1 && nextID == -1 && (aeID != _activesID)) return; // already deleted
+            if (prevID == -1 && nextID == -1 && aeID != _activesID) return; // already deleted
             if (prevID != -1)
                 _activesList.ElementAt(prevID).nextInAEL = nextID;
             else
@@ -2031,7 +2019,7 @@ namespace Clipper2AoS
                 // always trim 180 deg. spikes (in closed paths)
                 // but otherwise break if preserveCollinear = true
                 if (preserveCollinear &&
-                (pt.x < horzEdge.top.x) != (horzEdge.bot.x < horzEdge.top.x))
+                pt.x < horzEdge.top.x != horzEdge.bot.x < horzEdge.top.x)
                     break;
 
                 horzEdge.vertexTop = NextVertex(ref horzEdge);
@@ -2054,7 +2042,7 @@ namespace Clipper2AoS
         private int GetLastOp(ref Active hotEdge, int hotEdgeID)
         {
             ref var outrec = ref _outrecList.ElementAt(hotEdge.outrec);
-            return (hotEdgeID == outrec.frontEdge) ?
+            return hotEdgeID == outrec.frontEdge ?
               outrec.pts : _outPtList.ElementAt(outrec.pts).next;
         }
 
@@ -2127,8 +2115,8 @@ namespace Clipper2AoS
                     if (vertex_max != horz.vertexTop || IsOpenEnd(ref horz))
                     {
                         // otherwise stop when 'ae' is beyond the end of the horizontal line
-                        if ((isLeftToRight && ae.curX > rightX) ||
-                            (!isLeftToRight && ae.curX < leftX)) break;
+                        if (isLeftToRight && ae.curX > rightX ||
+                            !isLeftToRight && ae.curX < leftX) break;
 
                         if (ae.curX == horz.top.x && !IsHorizontal(ref ae))
                         {
@@ -2138,14 +2126,14 @@ namespace Clipper2AoS
                             // solutions, we'll only break if it's past HorzEdge's end
                             if (IsOpen(ref ae) && !IsSamePolyType(ref ae, ref horz) && !IsHotEdge(ref ae))
                             {
-                                if ((isLeftToRight && (TopX(ref ae, pt.y) > pt.x)) ||
-                                  (!isLeftToRight && (TopX(ref ae, pt.y) < pt.x))) break;
+                                if (isLeftToRight && TopX(ref ae, pt.y) > pt.x ||
+                                  !isLeftToRight && TopX(ref ae, pt.y) < pt.x) break;
                             }
                             // otherwise for edges at horzEdge's end, only stop when horzEdge's
                             // outslope is greater than e's slope when heading right or when
                             // horzEdge's outslope is less than e's slope when heading left.
-                            else if ((isLeftToRight && (TopX(ref ae, pt.y) >= pt.x)) ||
-                                (!isLeftToRight && (TopX(ref ae, pt.y) <= pt.x))) break;
+                            else if (isLeftToRight && TopX(ref ae, pt.y) >= pt.x ||
+                                !isLeftToRight && TopX(ref ae, pt.y) <= pt.x) break;
                         }
                     }
 
@@ -2340,7 +2328,7 @@ namespace Clipper2AoS
                 IsHorizontal(ref e) || IsHorizontal(ref prev) ||
                 IsOpen(ref e) || IsOpen(ref prev)) return;
             if ((pt.y < e.top.y + 2 || pt.y < prev.top.y + 2) &&    //avoid trivial joins
-              ((e.bot.y > pt.y) || (prev.bot.y > pt.y))) return;    // (#490)
+              (e.bot.y > pt.y || prev.bot.y > pt.y)) return;    // (#490)
 
             if (checkCurrX)
             {
@@ -2373,7 +2361,7 @@ namespace Clipper2AoS
                 IsHorizontal(ref e) || IsHorizontal(ref next) ||
                 IsOpen(ref e) || IsOpen(ref next)) return;
             if ((pt.y < e.top.y + 2 || pt.y < next.top.y + 2) &&    //avoid trivial joins
-              ((e.bot.y > pt.y) || (next.bot.y > pt.y))) return;    // (#490)
+              (e.bot.y > pt.y || next.bot.y > pt.y)) return;    // (#490)
 
             if (checkCurrX)
             {
@@ -2525,9 +2513,9 @@ namespace Clipper2AoS
                     ref var hs2 = ref _horzSegList.ElementAt(j);
                     ref var hs2LeftOp = ref _outPtList.ElementAt(hs2.leftOp);
                     ref var hs2RightOp = ref _outPtList.ElementAt(hs2.rightOp);
-                    if ((hs2LeftOp.pt.x >= hs1RightOp.pt.x) ||
-                       (hs2.leftToRight == hs1.leftToRight) ||
-                       (hs2RightOp.pt.x <= hs1LeftOp.pt.x)) continue;
+                    if (hs2LeftOp.pt.x >= hs1RightOp.pt.x ||
+                       hs2.leftToRight == hs1.leftToRight ||
+                       hs2RightOp.pt.x <= hs1LeftOp.pt.x) continue;
                     long curr_y = hs1LeftOp.pt.y;
                     if (hs1.leftToRight)
                     {
@@ -2593,8 +2581,8 @@ namespace Clipper2AoS
             ref var op2Next = ref _outPtList.ElementAt(op2.next);
             ref var op2Prev = ref _outPtList.ElementAt(op2.prev);
             while (op2.next != opID &&
-              ((op2.pt.x == op2Next.pt.x && op2.pt.x == op2Prev.pt.x) ||
-                (op2.pt.y == op2Next.pt.y && op2.pt.y == op2Prev.pt.y)))
+              (op2.pt.x == op2Next.pt.x && op2.pt.x == op2Prev.pt.x ||
+                op2.pt.y == op2Next.pt.y && op2.pt.y == op2Prev.pt.y))
             {
                 op2 = ref _outPtList.ElementAt(op2ID = op2.next);
                 op2Next = ref _outPtList.ElementAt(op2.next);
@@ -2653,8 +2641,8 @@ namespace Clipper2AoS
                 op2Prev = ref _outPtList.ElementAt(op2.prev);
                 if (op2.pt.y == pt.y) // touching the horizontal
                 {
-                    if (op2.pt.x == pt.x || (op2.pt.y == op2Prev.pt.y &&
-                      (pt.x < op2Prev.pt.x) != (pt.x < op2.pt.x)))
+                    if (op2.pt.x == pt.x || op2.pt.y == op2Prev.pt.y &&
+                      pt.x < op2Prev.pt.x != pt.x < op2.pt.x)
                         return PointInPolygonResult.IsOn;
                     op2 = ref _outPtList.ElementAt(op2ID = op2.next);
                     if (op2ID == opID) break;
@@ -2663,13 +2651,13 @@ namespace Clipper2AoS
 
                 if (op2.pt.x <= pt.x || op2Prev.pt.x <= pt.x)
                 {
-                    if ((op2Prev.pt.x < pt.x && op2.pt.x < pt.x))
+                    if (op2Prev.pt.x < pt.x && op2.pt.x < pt.x)
                         val = 1 - val; // toggle val
                     else
                     {
                         d = InternalClipper.CrossProductSign(op2Prev.pt, op2.pt, pt);
                         if (d == 0) return PointInPolygonResult.IsOn;
-                        if ((d < 0) == isAbove) val = 1 - val;
+                        if (d < 0 == isAbove) val = 1 - val;
                     }
                 }
                 isAbove = !isAbove;
@@ -2683,7 +2671,7 @@ namespace Clipper2AoS
             op2Prev = ref _outPtList.ElementAt(op2.prev);
             d = InternalClipper.CrossProductSign(op2Prev.pt, op2.pt, pt);
             if (d == 0) return PointInPolygonResult.IsOn;
-            if ((d < 0) == isAbove) val = 1 - val;
+            if (d < 0 == isAbove) val = 1 - val;
 
             return val == 0 ? PointInPolygonResult.IsOutside : PointInPolygonResult.IsInside;
         }
@@ -2815,7 +2803,7 @@ namespace Clipper2AoS
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool PtsReallyClose(long2 pt1, long2 pt2)
         {
-            return (math.abs(pt1.x - pt2.x) < 2) && (math.abs(pt1.y - pt2.y) < 2);
+            return math.abs(pt1.x - pt2.x) < 2 && math.abs(pt1.y - pt2.y) < 2;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2844,7 +2832,7 @@ namespace Clipper2AoS
         private int DisposeOutPt(int opID)
         {
             ref var op = ref _outPtList.ElementAt(opID);
-            int resultID = (op.next == opID ? -1 : op.next);
+            int resultID = op.next == opID ? -1 : op.next;
             _outPtList.ElementAt(op.prev).next = op.next;
             _outPtList.ElementAt(op.next).prev = op.prev;
             // op == null;
@@ -2875,9 +2863,9 @@ namespace Clipper2AoS
                 ref var op2Next = ref _outPtList.ElementAt(op2.next);
                 ref var op2Prev = ref _outPtList.ElementAt(op2.prev);
                 // NB if preserveCollinear == true, then only remove 180 deg. spikes
-                if ((InternalClipper.IsCollinear(op2Prev.pt, op2.pt, op2Next.pt)) &&
-                  ((op2.pt == op2Prev.pt) || (op2.pt == op2Next.pt) || !PreserveCollinear ||
-                  (InternalClipper.DotProduct(op2Prev.pt, op2.pt, op2Next.pt) < 0)))
+                if (InternalClipper.IsCollinear(op2Prev.pt, op2.pt, op2Next.pt) &&
+                  (op2.pt == op2Prev.pt || op2.pt == op2Next.pt || !PreserveCollinear ||
+                  InternalClipper.DotProduct(op2Prev.pt, op2.pt, op2Next.pt) < 0))
                 {
                     if (op2ID == outrec.pts)
                         outrec.pts = op2.prev;
@@ -2955,8 +2943,8 @@ namespace Clipper2AoS
             // the split triangle is larger than the path containing prevOp or
             // if there's more than one self=intersection.
             if (!(absArea2 > 1) ||
-                (!(absArea2 > absArea1) &&
-                 ((area2 > 0) != (area1 > 0)))) return;
+                !(absArea2 > absArea1) &&
+                 area2 > 0 != area1 > 0) return;
             int newOutRecID = NewOutRec();
             outrec = ref _outrecList.ElementAt(outrecID); //fetch again due to invalidated references
             ref var newOutRec = ref _outrecList.ElementAt(newOutRecID);
@@ -3046,19 +3034,19 @@ namespace Clipper2AoS
         internal bool PathIsOK(int opID, bool isOpen)
         {
             OutPt op;
-            if (opID == -1 || (op = _outPtList[opID]).next == opID || (!isOpen && op.next == op.prev)) return false;
+            if (opID == -1 || (op = _outPtList[opID]).next == opID || !isOpen && op.next == op.prev) return false;
 
             if (_outPtList[op.next].next == op.prev && IsVerySmallTriangle(opID)) return false; //identical to if (path.Count == 3)
             else return true;
         }
-        internal bool BuildPath(int opID, bool reverse, bool isOpen, ref PolygonInt path)
+        internal bool BuildPath(int opID, bool reverse, bool isOpen, ref NativeList<int2> nodes, ref NativeList<int> startIDs)
         {
             if (opID == -1)
                 return false;
             ref var op = ref _outPtList.ElementAt(opID);
-            if (op.next == opID || (!isOpen && op.next == op.prev)) return false;
+            if (op.next == opID || !isOpen && op.next == op.prev) return false;
 
-            path.AddComponent();
+            startIDs.Add(nodes.Length);
             long2 lastPt;
             int op2ID;
             if (reverse)
@@ -3074,47 +3062,58 @@ namespace Clipper2AoS
                 op2ID = op.next;
             }
             var firstPt = lastPt;
-            path.nodes.Add((int2)lastPt);
+            nodes.Add((int2)lastPt);
             //path.nodes.Add((int2)(_invScale * lastPt));//only needed when input Polygon was float or double
 
-            int pathCount = 0;
+            int pathCount = 1;
             while (op2ID != opID)
             {
                 ref var op2 = ref _outPtList.ElementAt(op2ID);
                 if (op2.pt != lastPt)
                 {
                     lastPt = op2.pt;
-                    path.nodes.Add((int2)lastPt);
+                    nodes.Add((int2)lastPt);
+                    pathCount++;
                     //path.nodes.Add((int2)(_invScale * lastPt));//only needed when input Polygon was float or double
                 }
                 if (reverse)
                     op2ID = op2.prev;
                 else
-                    op2ID = op2.next;
-                pathCount++;
+                    op2ID = op2.next;                
             }
-            if (!isOpen) //verify that polygon is closed
+            if (pathCount == 3 && !isOpen && IsVerySmallTriangle(op2ID))
             {
-                if (firstPt != lastPt)
-                    path.nodes.Add((int2)firstPt);
-                //path.nodes.Add((int2)(_invScale * firstPt));//only needed when input Polygon was float or double
-            }
-            if (pathCount == 3 && IsVerySmallTriangle(op2ID))
-            {
-                path.ClosePolygon();
-                path.RemoveLastComponent();
+                //remove last component
+                int startIDstart = startIDs.Length - 1;
+                int nodeStart = startIDs[startIDstart];
+                int nodeEnd = nodes.Length - 1;
+                for (int i = nodeEnd; i >= nodeStart; i--)
+                    nodes.RemoveAt(i);
+                startIDs.RemoveAt(startIDstart);
                 return false;
             }
-            else return true;
+            else
+            {
+                if (!isOpen) //verify that polygon is closed
+                {
+                    if (firstPt != lastPt)
+                        nodes.Add((int2)firstPt);
+                    //path.nodes.Add((int2)(_invScale * firstPt));//only needed when input Polygon was float or double
+                }
+                return true;
+            }
         }
-        bool BuildPaths(ref PolygonInt solutionClosed, ref PolygonInt solutionOpen)
+        bool BuildPaths(ref NativeList<int2> solutionNodes, ref NativeList<int> solutionStartIDs, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
-            solutionClosed.Clear();
-            solutionOpen.Clear();
-            solutionClosed.nodes.EnsureCapacity(_outPtList.Length);
-            solutionClosed.startIDs.EnsureCapacity(_outrecList.Length);
-            solutionOpen.nodes.EnsureCapacity(_outPtList.Length);
-            solutionOpen.startIDs.EnsureCapacity(_outrecList.Length);
+            solutionNodes.Clear();
+            solutionStartIDs.Clear();
+            solutionOpenNodes.Clear();
+            solutionOpenStartIDs.Clear();
+
+            solutionNodes.EnsureCapacity(_outPtList.Length);
+            solutionStartIDs.EnsureCapacity(_outrecList.Length);
+            solutionOpenNodes.EnsureCapacity(_outPtList.Length);
+            solutionOpenStartIDs.EnsureCapacity(_outrecList.Length);
 
             // _outrecList.Count is not static here because
             // CleanCollinear can indirectly add additional OutRec
@@ -3126,22 +3125,23 @@ namespace Clipper2AoS
                 if (outrec.pts == -1) continue;
 
                 if (outrec.isOpen)
-                    BuildPath(outrec.pts, ReverseSolution, true, ref solutionOpen);
+                    BuildPath(outrec.pts, ReverseSolution, true, ref solutionOpenNodes, ref solutionOpenStartIDs);
                 else
                 {
                     CleanCollinear(outrecID);
                     outrec = ref _outrecList.ElementAt(outrecID);
                     // closed paths should always return a Positive orientation
                     // except when ReverseSolution == true
-                    BuildPath(outrec.pts, ReverseSolution, false, ref solutionClosed);
+                    BuildPath(outrec.pts, ReverseSolution, false, ref solutionNodes, ref solutionStartIDs);
                 }
 
             }
-            if (solutionOpen.nodes.Length > 0)
-                solutionOpen.startIDs.Add(solutionOpen.nodes.Length);
-            if (solutionClosed.nodes.Length > 0)
-                solutionClosed.ClosePolygon();
+            if (solutionOpenNodes.Length > 0)
+                solutionOpenStartIDs.Add(solutionOpenNodes.Length);
 
+            //ensure polygon is closed
+            if (solutionStartIDs.Length > 0 && solutionStartIDs[^1] != solutionNodes.Length)
+                solutionStartIDs.Add(solutionNodes.Length);
             return true;
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -3229,14 +3229,15 @@ namespace Clipper2AoS
                 exteriorIDs.Add(outrecID);
             }
         }
-        void BuildTree(ref PolyTree polytree, ref PolygonInt solutionOpen)
+        void BuildTree(ref PolyTree polytree, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
             polytree.Clear();
-            solutionOpen.Clear();
+            solutionOpenNodes.Clear();
+            solutionOpenStartIDs.Clear();
             if (_hasOpenPaths)
             {
-                solutionOpen.nodes.EnsureCapacity(_outPtList.Length);
-                solutionOpen.startIDs.EnsureCapacity(_outrecList.Length);
+                solutionOpenNodes.EnsureCapacity(_outPtList.Length);
+                solutionOpenStartIDs.EnsureCapacity(_outrecList.Length);
             }
 
             var components = polytree.components;
@@ -3254,7 +3255,7 @@ namespace Clipper2AoS
 
                 if (outrec.isOpen)
                 {
-                    BuildPath(outrec.pts, ReverseSolution, true, ref solutionOpen);
+                    BuildPath(outrec.pts, ReverseSolution, true, ref solutionOpenNodes, ref solutionOpenStartIDs);
                     continue;
                 }
                 if (CheckBounds(outrecID))
@@ -3269,11 +3270,11 @@ namespace Clipper2AoS
                 }
             }
         }
-        public void GetPolygonWithHoles(in PolyTree polyTree, int outrecID, ref PolygonInt outPolygon)
+        public void GetPolygonWithHoles(in PolyTree polyTree, int outrecID, ref NativeList<int2> solutionNodes, ref NativeList<int> solutionStartIDs)
         {
             ref var outrec = ref _outrecList.ElementAt(outrecID);
             //Debug.Log($"taking Exterior {outrec} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes as is ");
-            BuildPath(outrec.pts, false, false, ref outPolygon);
+            BuildPath(outrec.pts, false, false, ref solutionNodes, ref solutionStartIDs);
 
             int holeID;
             int nextID = outrecID;
@@ -3289,36 +3290,29 @@ namespace Clipper2AoS
                 //if (hole.pts == -1) continue;
 
                 //Debug.Log($"taking Hole {holeID} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[holeID])} nodes as is");
-                BuildPath(hole.pts, false, false, ref outPolygon);
+                BuildPath(hole.pts, false, false, ref solutionNodes, ref solutionStartIDs);
 
                 nextID = holeID;
             }
-            outPolygon.ClosePolygon(); //abuse StartID to store end of last Component
+            //ensure polygon is closed
+            if (solutionStartIDs.Length > 0 && solutionStartIDs[^1] != solutionNodes.Length)
+                solutionStartIDs.Add(solutionNodes.Length);
         }
-        public bool Execute(ClipType clipType, FillRule fillRule, ref PolygonInt solutionClosed, ref PolygonInt solutionOpen)
+        public bool Execute(ClipType clipType, FillRule fillRule, ref NativeList<int2> solutionNodes, ref NativeList<int> solutionStartIDs, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
             _succeeded = true;
-            solutionClosed.Clear();
-            solutionOpen.Clear();
             ExecuteInternal(clipType, fillRule);
-            BuildPaths(ref solutionClosed, ref solutionOpen);
+            BuildPaths(ref solutionNodes, ref solutionStartIDs, ref solutionOpenNodes, ref solutionOpenStartIDs);
 
             ClearSolutionOnly();
             return _succeeded;
         }
-        public bool Execute(ClipType clipType, FillRule fillRule, ref PolygonInt solutionClosed)
-        {
-            var solutionOpen = new PolygonInt(0, Allocator.Temp);
-            return Execute(clipType, fillRule, ref solutionClosed, ref solutionOpen);
-        }
-        public bool Execute(ClipType clipType, FillRule fillRule, ref PolyTree polytree, ref PolygonInt openPaths)
+        public bool Execute(ClipType clipType, FillRule fillRule, ref NativeArray<int2> solutionNodes, ref PolyTree polytree, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
             _succeeded = true;
-            polytree.Clear();
-            openPaths.Clear();
             _using_polytree = true;
             ExecuteInternal(clipType, fillRule);
-            BuildTree(ref polytree, ref openPaths);
+            BuildTree(ref polytree, ref solutionOpenNodes, ref solutionOpenStartIDs);
 
             //ClearSolutionOnly(); //cannot access Polytree anymore once cleared
             return _succeeded;

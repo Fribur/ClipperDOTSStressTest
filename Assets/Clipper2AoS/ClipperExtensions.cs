@@ -1,6 +1,7 @@
-﻿using Chart3D.MathExtensions;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using Unity.Collections;
+using Chart3D.MathExtensions;
+using Clipper2AoS;
 
 namespace Clipper2AoS
 {

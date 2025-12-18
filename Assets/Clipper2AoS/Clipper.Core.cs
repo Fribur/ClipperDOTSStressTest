@@ -7,12 +7,13 @@
 * License   :  https://www.boost.org/LICENSE_1_0.txt                           *
 *******************************************************************************/
 
-using Chart3D.MathExtensions;
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+using Chart3D.MathExtensions;
+using Clipper2AoS;
 
 namespace Clipper2AoS
 {
@@ -99,14 +100,14 @@ namespace Clipper2AoS
     }
 
     //Note: all clipping operations except for Difference are commutative.
-    //public enum ClipType
-    //{
-    //    NoClip,
-    //    Intersection,
-    //    Union,
-    //    Difference,
-    //    Xor
-    //}
+    public enum ClipType
+    {
+        NoClip,
+        Intersection,
+        Union,
+        Difference,
+        Xor
+    }
 
     public enum PathType
     {

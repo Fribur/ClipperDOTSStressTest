@@ -1,0 +1,68 @@
+using Clipper2Lib;
+using Unity.Collections;
+using Unity.Entities;
+using Unity.Mathematics;
+//using UnityEngine;
+
+public static class StaticHelper
+{
+    public static readonly int DisplayWidth = 800;
+    public static readonly int DisplayHeight = 600;
+    public static readonly int edgeCount = 1000;
+    public static readonly int numberOfPolygons = 10;
+    public static void GenerateRandomPath(Random rand, int width, int height, int count, out Paths64 _subj, out Paths64 _clip)
+    {
+        _subj = new Paths64();
+        _clip = new Paths64();
+
+        _subj.Add(MakeRandomPath(width, height, count, ref rand));
+        _clip.Add(MakeRandomPath(width, height, count, ref rand));
+    }
+    private static Point64 MakeRandomPoint1(int maxWidth, int maxHeight, ref Random rand)
+    {
+        long x = rand.NextInt(0, maxWidth);
+        var y = rand.NextInt(0, maxHeight);
+        return new Point64(x, y);
+    }
+
+    public static Path64 MakeRandomPath(int width, int height, int count, ref Random rand)
+    {
+        var result = new Path64(count);
+        for (int i = 0; i < count; ++i)
+            result.Add(MakeRandomPoint1(width, height, ref rand));
+        return result;
+    }
+    public static Paths64 GetPaths64(DynamicBuffer<int2> nodes, DynamicBuffer<int> startIDs)
+    {
+        var _paths = new Paths64();
+        for (int i = 0, length = startIDs.Length - 1; i < length; i++)
+        {
+            var start = startIDs[i];
+            var end = startIDs[i + 1];
+            var tempPath = new Path64(end - start);
+            for (int k = start; k < end; k++)
+            {
+                var node = nodes[k];
+                tempPath.Add(new Point64(node.x, node.y));
+            }
+            _paths.Add(tempPath);
+        }
+        return _paths;
+    }
+    public static void GetPolygon(DynamicBuffer<Nodes> nodesBuffer, DynamicBuffer<StartIDs> startIDsBuffer, out NativeArray<int2> nodes, out NativeArray<int> startIDs, Allocator allocator)
+    {
+        nodes = CollectionHelper.CreateNativeArray<int2>(nodesBuffer.Reinterpret<int2>().AsNativeArray(), allocator);
+        startIDs = CollectionHelper.CreateNativeArray<int>(startIDsBuffer.Reinterpret<int>().AsNativeArray(), allocator);
+    }
+    public static void GenerateRandomNodes(Random rand, ref DynamicBuffer<int2> nodes, int width, int height, int count)
+    {
+        for (int i = 0; i < count; ++i)
+            nodes.Add(MakeRandomPoint2(width, height, ref rand));
+    }
+    private static int2 MakeRandomPoint2(int maxWidth, int maxHeight, ref Random rand)
+    {
+        int x = rand.NextInt(0, maxWidth);
+        int y = rand.NextInt(0, maxHeight);
+        return new int2(x, y);
+    }
+}

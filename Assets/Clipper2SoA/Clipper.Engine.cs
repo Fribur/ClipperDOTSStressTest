@@ -635,24 +635,14 @@ namespace Clipper2SoA
             }
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddSubject(ref PolygonInt paths)
-        {
-            AddPaths(ref paths, PathType.Subject);
-        }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddSubject(NativeArray<int2> nodes, NativeArray<int> startIDs)
         {
             AddPaths(nodes, startIDs, PathType.Subject);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddOpenSubject(ref PolygonInt paths)
+        public void AddOpenSubject(NativeArray<int2> nodes, NativeArray<int> startIDs)
         {
-            AddPaths(ref paths, PathType.Subject, true);
-        }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddClip(ref PolygonInt paths)
-        {
-            AddPaths(ref paths, PathType.Clip);
+            AddPaths(nodes, startIDs, PathType.Subject, true);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddClip(NativeArray<int2> nodes, NativeArray<int> startIDs)
@@ -666,14 +656,6 @@ namespace Clipper2SoA
             isSortedMinimaList = false;
             EnsureVertexListCapacity(end - start);
             AddPathToVertexList(nodes, start, end, polytype, isOpen);
-        }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddPaths(ref PolygonInt path, PathType polytype, bool isOpen = false)
-        {
-            if (isOpen) hasOpenPaths = true;
-            isSortedMinimaList = false;
-            EnsureVertexListCapacity(path.nodes.Length);
-            AddPathsToVertexList(path.nodes.AsArray(), path.startIDs.AsArray(), polytype, isOpen);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddPaths(NativeArray<int2> nodes, NativeArray<int> startIDs, PathType polytype, bool isOpen = false)
@@ -2584,12 +2566,11 @@ namespace Clipper2SoA
                 if (op2 == outrecList.pts[outrec]) break;
             }
         }
-        internal bool BuildPath(int op, bool reverse, bool isOpen, ref PolygonInt path)
+        internal bool BuildPath(int op, bool reverse, bool isOpen, ref NativeList<int2> nodes, ref NativeList<int> startIDs)
         {
             if (op == -1 || outPtList.next[op] == op || (!isOpen && outPtList.next[op] == outPtList.prev[op])) return false;
 
-            path.AddComponent();
-
+            startIDs.Add(nodes.Length);
             long2 lastPt;
             int op2;
             if (reverse)
@@ -2605,7 +2586,7 @@ namespace Clipper2SoA
             }
             var firstPt = lastPt;
             //path.nodes.Add(lastPt);
-            path.nodes.Add((int2)(_invScale * lastPt)); //only needed when input Polygon was float or double
+            nodes.Add((int2)(_invScale * lastPt)); //only needed when input Polygon was float or double
 
 
             while (op2 != op)
@@ -2615,7 +2596,7 @@ namespace Clipper2SoA
                 {
                     lastPt = op2Pt;
                     //path.nodes.Add(lastPt);
-                    path.nodes.Add((int2)(_invScale * lastPt));//only needed when input Polygon was float or double
+                    nodes.Add((int2)(_invScale * lastPt));//only needed when input Polygon was float or double
 
                 }
                 if (reverse)
@@ -2627,19 +2608,20 @@ namespace Clipper2SoA
             {
                 if (firstPt != lastPt)
                     //path.nodes.Add(lastPt);
-                    path.nodes.Add((int2)(_invScale * firstPt)); //only needed when input Polygon was float or double
+                    nodes.Add((int2)(_invScale * firstPt)); //only needed when input Polygon was float or double
             }
             return true;
         }
-        bool BuildPaths(ref PolygonInt solutionClosed, ref PolygonInt solutionOpen)
+        bool BuildPaths(ref NativeList<int2> solutionNodes, ref NativeList<int> solutionStartIDs, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
-
-            solutionClosed.Clear();
-            solutionOpen.Clear();
-            solutionClosed.nodes.Capacity = outPtList.pt.Length;
-            solutionOpen.nodes.Capacity = outPtList.pt.Length;
-            solutionClosed.startIDs.Capacity = outrecList.owner.Length;
-            solutionOpen.startIDs.Capacity = outrecList.owner.Length;
+            solutionNodes.Clear();
+            solutionStartIDs.Clear();
+            solutionOpenNodes.Clear();
+            solutionOpenStartIDs.Clear();
+            solutionNodes.Capacity = outPtList.pt.Length;
+            solutionStartIDs.Capacity = outrecList.owner.Length;
+            solutionOpenNodes.Capacity = outPtList.pt.Length;
+            solutionOpenStartIDs.Capacity = outrecList.owner.Length;
 
             int i = 0;
             // _outrecList.Count is not static here because
@@ -2651,20 +2633,18 @@ namespace Clipper2SoA
                 if (outrecList.pts[outrec] == -1) continue;
 
                 if (outrecList.isOpen[outrec])
-                    BuildPath(outrecList.pts[outrec], ReverseSolution, true, ref solutionOpen);
+                    BuildPath(outrecList.pts[outrec], ReverseSolution, true, ref solutionOpenNodes, ref solutionOpenStartIDs);
                 else
                 {
                     CleanCollinear(outrec);
                     // closed paths should always return a Positive orientation
                     // except when ReverseSolution == true
-                    BuildPath(outrecList.pts[outrec], ReverseSolution, false, ref solutionClosed);
+                    BuildPath(outrecList.pts[outrec], ReverseSolution, false, ref solutionNodes, ref solutionStartIDs);
                 }
             }
-            if (solutionOpen.nodes.Length > 0)
-                solutionOpen.ClosePolygon();
-            if (solutionClosed.nodes.Length > 0)
-                solutionClosed.ClosePolygon();
-
+            //ensure polygon is closed
+            if (solutionStartIDs.Length > 0 && solutionStartIDs[^1] != solutionNodes.Length)
+                solutionStartIDs.Add(solutionNodes.Length);
             return true;
         }
 
@@ -2718,12 +2698,13 @@ namespace Clipper2SoA
             }
         }
 
-        bool BuildTree(ref PolyTree polytree, ref PolygonInt solutionOpen)
+        bool BuildTree(ref PolyTree polytree, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
             polytree.Clear(outrecList.owner.Length, Allocator.Temp);
-            solutionOpen.Clear();
-            solutionOpen.nodes.Capacity = outPtList.pt.Length;
-            solutionOpen.startIDs.Capacity = outrecList.owner.Length;
+            solutionOpenNodes.Clear();
+            solutionOpenStartIDs.Clear();
+            solutionOpenNodes.Capacity = outPtList.pt.Length;
+            solutionOpenStartIDs.Capacity = outrecList.owner.Length;
             var components = polytree.components;
             var exteriorIDs = polytree.exteriorIDs;
             for (int i = 0, length = components.Length; i < length; i++)
@@ -2735,7 +2716,7 @@ namespace Clipper2SoA
 
                 if (outrecList.isOpen[outrec])
                 {
-                    BuildPath(outrecList.pts[outrec], ReverseSolution, true, ref solutionOpen);
+                    BuildPath(outrecList.pts[outrec], ReverseSolution, true, ref solutionOpenNodes, ref solutionOpenStartIDs);
                     continue;
                 }
                 if (!IsValidClosedPath(outrecList.pts[outrec]))
@@ -2763,10 +2744,10 @@ namespace Clipper2SoA
             return true;
         }
 
-        public void GetPolygonWithHoles(in PolyTree polyTree, int outrec, ref PolygonInt outPolygon)
+        public void GetPolygonWithHoles(in PolyTree polyTree, int outrec, ref NativeList<int2> solutionNodes, ref NativeList<int> solutionStartIDs)
         {
             //Debug.Log($"taking Exterior {outrec} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[outrec])} nodes as is ");
-            BuildPath(outrecList.pts[outrec], false, false, ref outPolygon);
+            BuildPath(outrecList.pts[outrec], false, false, ref solutionNodes, ref solutionStartIDs);
 
             int hole;
             int next = outrec;
@@ -2779,37 +2760,32 @@ namespace Clipper2SoA
                     continue;
                 }
                 //Debug.Log($"taking Hole {holeID} with {InternalClipperFunc.PointCount(outPtList, outrecList.pts[holeID])} nodes as is");
-                BuildPath(outrecList.pts[hole], false, false, ref outPolygon);
+                BuildPath(outrecList.pts[hole], false, false, ref solutionNodes, ref solutionStartIDs);
 
                 next = hole;
             }
-            outPolygon.ClosePolygon(); //abuse StartID to store end of last Component
+            //ensure polygon is closed
+            if (solutionStartIDs.Length > 0 && solutionStartIDs[^1] != solutionNodes.Length)
+                solutionStartIDs.Add(solutionNodes.Length);
         }
 
-        public bool Execute(ClipType clipType, FillRule fillRule, ref PolygonInt solutionClosed, ref PolygonInt solutionOpen)
+        public bool Execute(ClipType clipType, FillRule fillRule, ref NativeList<int2> solutionNodes, ref NativeList<int> solutionStartIDs, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
             _succeeded = true;
-            solutionClosed.Clear();
-            solutionOpen.Clear();
             ExecuteInternal(clipType, fillRule);
-            BuildPaths(ref solutionClosed, ref solutionOpen);
+            BuildPaths(ref solutionNodes, ref solutionStartIDs, ref solutionOpenNodes, ref solutionOpenStartIDs);
 
             ClearSolutionOnly();
             return _succeeded;
         }
-        public bool Execute(ClipType clipType, FillRule fillRule, ref PolygonInt solutionClosed)
-        {
-            var solutionOpen = new PolygonInt(0, Allocator.Temp);
-            return Execute(clipType, fillRule, ref solutionClosed, ref solutionOpen);
-        }
-        public bool Execute(ClipType clipType, FillRule fillRule, ref PolyTree polytree, ref PolygonInt openPaths)
+        public bool Execute(ClipType clipType, FillRule fillRule, ref NativeArray<int2> solutionNodes, ref PolyTree polytree, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
             _succeeded = true;
             _using_polytree = true;
             ExecuteInternal(clipType, fillRule);
-            BuildTree(ref polytree, ref openPaths);
+            BuildTree(ref polytree, ref solutionOpenNodes, ref solutionOpenStartIDs);
 
-            //ClearSolution();
+            //ClearSolutionOnly(); //cannot access Polytree anymore once cleared
             return _succeeded;
         }
         public void PrintVertices()

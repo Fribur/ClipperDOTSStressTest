@@ -7,11 +7,12 @@
 * License   :  http://www.boost.org/LICENSE_1_0.txt                            *
 *******************************************************************************/
 
-using Chart3D.MathExtensions;
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Mathematics;
+using Chart3D.MathExtensions;
+using Clipper2AoS;
 
 namespace Clipper2AoS
 {
@@ -138,16 +139,15 @@ namespace Clipper2AoS
             }
         }
 
-        public void Execute(double delta, ref PolygonInt solution)
+        public void Execute(double delta, ref NativeList<int2> solutionNodes, ref NativeList<int> solutionStartIDs, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
-            solution.Clear();
             ExecuteInternal(delta);
 
             // clean up self-intersections ...
             clipperL.AddPath(outPath.AsArray(), 0, outPath.Length, PathType.Subject);
             clipperL.PreserveCollinear = PreserveCollinear;
             clipperL.ReverseSolution = ReverseSolution;
-            clipperL.Execute(ClipType.Union, FillRule.Positive, ref solution);
+            clipperL.Execute(ClipType.Union, FillRule.Positive, ref solutionNodes, ref solutionStartIDs, ref solutionOpenNodes, ref solutionOpenStartIDs);
         }
 
 
@@ -165,9 +165,9 @@ namespace Clipper2AoS
             return new double2(dy, -dx);
         }
 
-        public void Execute(ref PolygonInt solution)
+        public void Execute(ref NativeList<int2> solutionNodes, ref NativeList<int> solutionStartIDs, ref NativeList<int2> solutionOpenNodes, ref NativeList<int> solutionOpenStartIDs)
         {
-            Execute(1.0, ref solution);
+            Execute(1.0, ref solutionNodes, ref solutionStartIDs, ref solutionOpenNodes, ref solutionOpenStartIDs);
         }
 
 
@@ -405,12 +405,22 @@ namespace Clipper2AoS
                 OffsetPoint(path, i, ref prev);
         }
 
-
+        /// <summary>
+        /// positive area = CCW, negative area = CW (works for closed and open polygon (identical result))
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double SignedArea(NativeList<int2> data, int start, int end)
+        {
+            double area = default;
+            for (int i = start, prev = end - 1; i < end; prev = i++) //from (0, prev) until (end, prev)
+                area += ((double)data[prev].x - (double)data[i].x) * ((double)data[i].y + (double)data[prev].y);
+            return area * 0.5;
+        }
         private void DoGroupOffset()
         {
             if (_endType == EndType.Polygon)
             {
-                double area = MathHelper.SignedArea(inPath, 0, inPath.Length);
+                double area = SignedArea(inPath, 0, inPath.Length);
                 //if (area == 0) return; // this is probably unhelpful (#430)
                 pathsReversed = (area < 0);
                 if (pathsReversed) _groupDelta = -_delta;

@@ -1,5 +1,4 @@
 ﻿using Chart3D.MathExtensions;
-
 namespace Clipper2AoS
 {
     public struct Vertex
