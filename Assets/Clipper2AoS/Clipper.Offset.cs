@@ -12,7 +12,6 @@ using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Mathematics;
 using Chart3D.MathExtensions;
-using Clipper2AoS;
 
 namespace Clipper2AoS
 {

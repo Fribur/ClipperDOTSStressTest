@@ -13,7 +13,6 @@ using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
 using Chart3D.MathExtensions;
-using Clipper2AoS;
 
 namespace Clipper2AoS
 {
@@ -331,8 +330,8 @@ namespace Clipper2AoS
         {
             ref var op = ref _outPtList.ElementAt(opID);
             Rect64 result = Rect64.InvalidRect64;
-            int op2ID = op.next;
-            while (op2ID != opID)
+            int op2ID = opID;
+            do
             {
                 ref var op2 = ref _outPtList.ElementAt(op2ID);
                 var pt = op2.pt;
@@ -341,7 +340,7 @@ namespace Clipper2AoS
                 if (pt.y < result.top) result.top = pt.y;
                 if (pt.y > result.bottom) result.bottom = pt.y;
                 op2ID = op2.next;
-            }
+            } while (op2ID != opID);
             return result;
         }
         public static Rect64 GetBounds(NativeList<long2> path)

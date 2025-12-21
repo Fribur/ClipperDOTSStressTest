@@ -7,33 +7,7 @@ namespace Clipper2Lib
 {
     public static class PathToNativeHelper
     {
-        /// <summary>
-        /// positive area = CCW, negative area = CW (works for closed and open polygon (identical result))
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double SignedArea(NativeList<int2> data, int start, int end)
-        {
-            double area = default;
-            for (int i = start, prev = end - 1; i < end; prev = i++) //from (0, prev) until (end, prev)
-                area += ((double)data[prev].x - (double)data[i].x) * ((double)data[i].y + (double)data[prev].y);
-            return area * 0.5;
-        }
-        /// <summary>
-        /// positive area = CCW, negative area = CW (works for closed and open polygon (identical result))
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double SignedArea(NativeList<int2> nodes, NativeList<int> startIDs)
-        {
-            double area = 0;
-            for (int k = 0, length = startIDs.Length - 1; k < length; k++)
-            {
-                int start = startIDs[k];
-                int end = startIDs[k + 1];
-                area += SignedArea(nodes, start, end);
-                //Debug.Log($"Area: {area}");
-            }
-            return area;
-        }
+
         public static Clipper2AoS.ClipType ClipType_ClipperToNative(Clipper2Lib.ClipType clipType)
         {
             switch (clipType)

@@ -73,7 +73,7 @@ public class LinesTests
 
             if (area > 0)
             {
-                double area2 = (long)PathToNativeHelper.SignedArea(solutionNodes, solutionStartIDs);
+                double area2 = (long)PolyTreeAccessorExtensions.SignedArea(solutionNodes, solutionStartIDs);
                 double a = area / area2;
                 Assert.IsTrue(a > 0.995 && a < 1.005,
                   string.Format("Incorrect area in test {0}", i));

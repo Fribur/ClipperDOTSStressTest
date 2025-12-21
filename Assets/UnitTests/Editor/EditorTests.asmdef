@@ -13,10 +13,10 @@
         "ECSTestsFixture",
         "Clipper2Lib",
         "Clipper2AoS",
-        "Chart3D.MathExtensions",
         "Chart3D.MinHeap",
         "ClipperUtils",
-        "Unity.Mathematics"
+        "Unity.Mathematics",
+        "ClipperCommon"
     ],
     "includePlatforms": [
         "Editor"

@@ -108,7 +108,7 @@ public class PolygonTests
             c_L.AddClip(clipNodes.AsArray(), clipStartIDs.AsArray());
             c_L.Execute(nativeClipType, nativeFillRule, ref solutionNodes, ref solutionStartIDs, ref openSolutionNodes, ref openSolutionStartIDs);
             int measuredCount = solutionStartIDs.Length - 1;
-            long measuredArea = (long)PathToNativeHelper.SignedArea(solutionNodes, solutionStartIDs);
+            long measuredArea = (long)PolyTreeAccessorExtensions.SignedArea(solutionNodes, solutionStartIDs);
             int countDiff = storedCount > 0 ? Math.Abs(storedCount - measuredCount) : 0;
             long areaDiff = storedArea > 0 ? Math.Abs(storedArea - measuredArea) : 0;
             double areaDiffRatio = storedArea <= 0 ? 0 : (double)areaDiff / storedArea;
