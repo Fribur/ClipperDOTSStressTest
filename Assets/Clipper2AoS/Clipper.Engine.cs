@@ -1389,8 +1389,6 @@ namespace Clipper2AoS
         private int NewOutRec()
         {
             int currentID = _outrecList.Length;
-            if (currentID == 5597)
-            { }
             OutRec result = new OutRec
             {
                 //outPtCount = 0,
@@ -2673,7 +2671,7 @@ namespace Clipper2AoS
 
             return val == 0 ? PointInPolygonResult.IsOutside : PointInPolygonResult.IsInside;
         }
-        public bool Path1InsidePath2(int op1ID, int op2ID)
+        internal bool Path1InsidePath2(int op1ID, int op2ID)
         {
             // we need to make some accommodation for rounding errors
             // so we won't jump if the first vertex is found outside
