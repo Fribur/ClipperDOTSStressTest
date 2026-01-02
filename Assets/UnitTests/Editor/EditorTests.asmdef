@@ -16,7 +16,8 @@
         "Chart3D.MinHeap",
         "ClipperUtils",
         "Unity.Mathematics",
-        "ClipperCommon"
+        "ClipperCommon",
+        "Polybool"
     ],
     "includePlatforms": [
         "Editor"

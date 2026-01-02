@@ -1,11 +1,11 @@
-using Clipper2SoA;
+using Polybool;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 
-public partial struct Clipper2SoASystem : ISystem
+public partial struct PolyboolBURSTSystem : ISystem
 {
     EntityQuery polygonQuery;
     void OnCreate(ref SystemState state)
@@ -23,17 +23,17 @@ public partial struct Clipper2SoASystem : ISystem
 
     public void OnUpdate(ref SystemState state)
     {
-        if (SystemAPI.GetSingleton<ClipperStressTest>().clipperTestType != ClipperTestType.Clipper2SoA)
+        if (SystemAPI.GetSingleton<ClipperStressTest>().clipperTestType != ClipperTestType.PolyboolBURST)
             return;
 
         if (polygonQuery.IsEmpty)
             return;
 
         var polgyonEntities = polygonQuery.ToEntityArray(Allocator.Temp);
-        NativeArray<int2> subjectNodes = default;
-        NativeArray<int> subjectStartIDs = default;
-        NativeArray<int2> clipNodes = default;
-        NativeArray<int> clipStartIDs = default;
+        NativeList<long2> subjectNodes = default;
+        NativeList<int> subjectStartIDs = default;
+        NativeList<long2> clipNodes = default;
+        NativeList<int> clipStartIDs = default;
         for (int i = 0, length = polgyonEntities.Length; i < length; i++)
         {
             var entity = polgyonEntities[i];
@@ -46,46 +46,37 @@ public partial struct Clipper2SoASystem : ISystem
                 StaticHelper.GetPolygon(nodesBuffer, startIDsBuffer, out clipNodes, out clipStartIDs, Allocator.Persistent);
         }
 
-        var clipper2SoAJob = new Clipper2SoAJob()
+        var polyboolJob = new PolyboolJob()
         {
             subjectNodes = subjectNodes,
             subjectStartIDs = subjectStartIDs,
             clipNodes = clipNodes,
             clipStartIDs = clipStartIDs
         };
-        state.Dependency = clipper2SoAJob.Schedule(state.Dependency);
+        state.Dependency = polyboolJob.Schedule(state.Dependency);
         subjectNodes.Dispose(state.Dependency);
         subjectStartIDs.Dispose(state.Dependency);
         clipNodes.Dispose(state.Dependency);
         clipStartIDs.Dispose(state.Dependency);
     }
-    //[BurstCompile]
-    struct Clipper2SoAJob : IJob
+    [BurstCompile]
+    struct PolyboolJob : IJob
     {
-        [ReadOnly] public NativeArray<int2> subjectNodes;
-        [ReadOnly] public NativeArray<int> subjectStartIDs;
-        [ReadOnly] public NativeArray<int2> clipNodes;
-        [ReadOnly] public NativeArray<int> clipStartIDs;
+        [ReadOnly] public NativeList<long2> subjectNodes;
+        [ReadOnly] public NativeList<int> subjectStartIDs;
+        [ReadOnly] public NativeList<long2> clipNodes;
+        [ReadOnly] public NativeList<int> clipStartIDs;
 
         public void Execute()
         {
-            ClipperD L_c = new ClipperD(Allocator.Temp);
-            var solutionNodes = new NativeList<int2>(16, Allocator.Temp);
-            var solutionStartIDs = new NativeList<int>(4, Allocator.Temp);
-            var openSolutionNodes = new NativeList<int2>(16, Allocator.Temp);
-            var openSolutionStartIDs = new NativeList<int>(4, Allocator.Temp);
-            //for (int i = 0; i < StaticHelper.numberOfPolygons; i++)
+            var polyBoolIntersector = new Intersecter(true, subjectNodes.Length, FillRule.EvenOdd, Allocator.Temp);
+            var subject = new Polygon(subjectNodes, subjectStartIDs, false);
+            var clip = new Polygon(clipNodes, clipStartIDs, false);
+            for (int i = 0; i < StaticHelper.numberOfPolygons; i++)
             {
-                L_c.AddSubject(subjectNodes, subjectStartIDs);
-                L_c.AddClip(clipNodes, clipStartIDs);
-                L_c.Execute(ClipType.Intersection, FillRule.NonZero, ref solutionNodes, ref solutionStartIDs, ref openSolutionNodes, ref openSolutionStartIDs);
-                L_c.Clear();
-                solutionNodes.Clear();
-                solutionStartIDs.Clear();
-                openSolutionNodes.Clear();
-                openSolutionStartIDs.Clear();
+                polyBoolIntersector.Reset(true, FillRule.EvenOdd);
+                var result = PolyboolClipper.Operate(subject, clip, ClipType.Intersection, FillRule.EvenOdd, ref polyBoolIntersector);
             }
         }
     }
 }
-

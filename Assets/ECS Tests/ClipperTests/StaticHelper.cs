@@ -1,4 +1,5 @@
 using Clipper2Lib;
+using Polybool;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -9,7 +10,7 @@ public static class StaticHelper
     public static readonly int DisplayWidth = 800;
     public static readonly int DisplayHeight = 600;
     public static readonly int edgeCount = 1000;
-    public static readonly int numberOfPolygons = 10;
+    public static readonly int numberOfPolygons = 1;
     public static void GenerateRandomPath(Random rand, int width, int height, int count, out Paths64 _subj, out Paths64 _clip)
     {
         _subj = new Paths64();
@@ -53,6 +54,17 @@ public static class StaticHelper
     {
         nodes = CollectionHelper.CreateNativeArray<int2>(nodesBuffer.Reinterpret<int2>().AsNativeArray(), allocator);
         startIDs = CollectionHelper.CreateNativeArray<int>(startIDsBuffer.Reinterpret<int>().AsNativeArray(), allocator);
+    }
+    public static void GetPolygon(DynamicBuffer<Nodes> nodesBuffer, DynamicBuffer<StartIDs> startIDsBuffer, out NativeList<long2> nodes, out NativeList<int> startIDs, Allocator allocator)
+    {
+        nodes = new NativeList<long2>(nodesBuffer.Length, allocator);
+        startIDs = new NativeList<int>(startIDsBuffer.Length, allocator);
+        for (int i = 0, ii = nodesBuffer.Length; i < ii; i++)
+        {
+            var node = nodesBuffer[i];
+            nodes.Add(new long2(node.value.x, node.value.y));
+        }
+        startIDs.AddRange(startIDsBuffer.Reinterpret<int>().AsNativeArray());
     }
     public static void GenerateRandomNodes(Random rand, ref DynamicBuffer<int2> nodes, int width, int height, int count)
     {

@@ -6,6 +6,7 @@ public enum ClipperTestType
     Clipper2AoS,
     Clipper2SoABURST,
     Clipper2AoSBURST,
+    PolyboolBURST,
     Clipper2SoABURSTJobs,
     Clipper2AoSBURSTJobs,
 }

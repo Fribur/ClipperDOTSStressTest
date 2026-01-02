@@ -21,7 +21,7 @@ public partial struct Clipper2AoSSystem : ISystem
     {
     }
 
-    void OnUpdate(ref SystemState state)
+    public void OnUpdate(ref SystemState state)
     {
         if (SystemAPI.GetSingleton<ClipperStressTest>().clipperTestType != ClipperTestType.Clipper2AoS)
             return;
