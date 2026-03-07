@@ -1,4 +1,5 @@
 ﻿using Chart3D.MathExtensions;
+
 namespace Clipper2AoS
 {
     // IntersectNode: a structure representing 2 intersecting edges.

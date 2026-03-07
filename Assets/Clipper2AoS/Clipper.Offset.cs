@@ -7,11 +7,11 @@
 * License   :  http://www.boost.org/LICENSE_1_0.txt                            *
 *******************************************************************************/
 
+using Chart3D.MathExtensions;
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Mathematics;
-using Chart3D.MathExtensions;
 
 namespace Clipper2AoS
 {

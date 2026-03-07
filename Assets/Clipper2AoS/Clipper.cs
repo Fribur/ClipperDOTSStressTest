@@ -1,5 +1,5 @@
-﻿using Unity.Mathematics;
-using Chart3D.MathExtensions;
+﻿using Chart3D.MathExtensions;
+using Unity.Mathematics;
 
 namespace Clipper2AoS
 {

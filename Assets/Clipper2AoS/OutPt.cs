@@ -1,4 +1,5 @@
 ﻿using Chart3D.MathExtensions;
+
 namespace Clipper2AoS
 {
     // OutPt: vertex data structure for clipping solutions

@@ -1,19 +1,19 @@
 ﻿/*******************************************************************************
 * Author    :  Angus Johnson                                                   *
-* Date      :  5 November 2025                                                 *
+* Date      :  21 February 2026                                                 *
 * Website   :  https://www.angusj.com                                          *
-* Copyright :  Angus Johnson 2010-2025                                         *
+* Copyright :  Angus Johnson 2010-2026                                         *
 * Purpose   :  This is the main polygon clipping module                        *
 * Thanks    :  Special thanks to Thong Nguyen, Guus Kuiper, Phil Stopford,     *
 *           :  and Daniel Gosnell for their invaluable assistance with C#.     *
 * License   :  https://www.boost.org/LICENSE_1_0.txt                           *
 *******************************************************************************/
 
-using Chart3D.MathExtensions;
-using Chart3D.MinHeap;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Chart3D.MathExtensions;
+using Chart3D.MinHeap;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
@@ -2993,31 +2993,16 @@ namespace Clipper2AoS
                 if (InternalClipper.SegsIntersect(op2Prev.pt,
                         op2.pt, op2Next.pt, op2NextNext.pt))
                 {
-                    if (InternalClipper.SegsIntersect(op2Prev.pt,
-                            op2.pt, op2NextNext.pt, op2NextNextNext.pt))
-                    {
-                        // adjacent intersections (ie a micro self-intersection)
-                        op2ID = DuplicateOp(op2ID, false);
-                        op2 = ref _outPtList.ElementAt(op2ID);
-                        op2Next = ref _outPtList.ElementAt(op2.next);
-                        op2NextNext = ref _outPtList.ElementAt(op2Next.next);
-                        op2NextNextNext = ref _outPtList.ElementAt(op2NextNext.next);
-                        op2.pt = op2NextNextNext.pt;
-                        op2ID = op2.next;
-                    }
-                    else
-                    {
-                        if (op2ID == outrec.pts || op2.next == outrec.pts)
-                            outrec.pts = _outPtList.ElementAt(outrec.pts).prev;
-                        DoSplitOp(outrecID, op2ID);
-                        if ((outrec = _outrecList[outrecID]).pts == -1) return;
-                        op2ID = outrec.pts;
-                        op2 = ref _outPtList.ElementAt(op2ID);
-                        op2Next = ref _outPtList.ElementAt(op2.next);
-                        // triangles can't self-intersect
-                        if (op2.prev == op2Next.next) break;
-                        continue;
-                    }
+                    if (op2ID == outrec.pts || op2.next == outrec.pts)
+                        outrec.pts = _outPtList.ElementAt(outrec.pts).prev;
+                    DoSplitOp(outrecID, op2ID);
+                    if ((outrec = _outrecList[outrecID]).pts == -1) return;
+                    op2ID = outrec.pts;
+                    op2 = ref _outPtList.ElementAt(op2ID);
+                    op2Next = ref _outPtList.ElementAt(op2.next);
+                    // triangles can't self-intersect
+                    if (op2.prev == op2Next.next) break;
+                    continue;
                 }
 
                 op2ID = op2.next;
@@ -3314,7 +3299,10 @@ namespace Clipper2AoS
         {            
             var nodes = polytree.nodes;
             if (exteriorNode == -1) return;
-            var queue = new NativeList<int>(16, Allocator.Temp);
+            var queue = new NativeList<int>(16, Allocator.Temp) 
+            { 
+                exteriorNode 
+            };
             for (int c = nodes[exteriorNode].firstChild; c != -1; c = nodes[c].nextSibling)
                 queue.Add(c);
 
